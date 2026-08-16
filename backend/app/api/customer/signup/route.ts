@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 
 // Define your CORS headers to match the frontend
 const corsHeaders = {
-  'Access-Control-Allow-Origin': 'http://localhost:5173', // Update if your port changes
+  'Access-Control-Allow-Origin': '*', // Update if your port changes
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Access-Control-Allow-Credentials': 'true', 

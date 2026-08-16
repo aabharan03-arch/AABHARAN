@@ -3,7 +3,7 @@ import { decrypt } from '@/lib/auth';
 import { prisma } from '@/lib/prisma'; // 👈 Import your Prisma client instance
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': 'http://localhost:5173',
+  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Access-Control-Allow-Credentials': 'true',
