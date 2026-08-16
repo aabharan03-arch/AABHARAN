@@ -3,14 +3,8 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { encrypt } from '@/lib/auth';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-
 export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+  return NextResponse.json({});
 }
 
 export async function POST(request: Request) {
@@ -19,12 +13,12 @@ export async function POST(request: Request) {
 
     const customer = await prisma.customer.findUnique({ where: { email } });
     if (!customer) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401, headers: corsHeaders });
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
     const isPasswordValid = await bcrypt.compare(password, customer.password);
     if (!isPasswordValid) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401, headers: corsHeaders });
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
     const token = await encrypt({ userId: customer.id, email: customer.email });
@@ -32,13 +26,13 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         message: 'Signed in successfully',
-        token, // ✅ return token in body instead of setting a cookie
+        token,
         user: { id: customer.id, email: customer.email, name: customer.name },
       },
-      { status: 204, headers: corsHeaders }
+      { status: 200 }
     );
   } catch (error) {
     console.error('LOGIN ROUTE ERROR:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
