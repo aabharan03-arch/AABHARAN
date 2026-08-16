@@ -82,11 +82,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       }
     } else {
       // If client didn't explicitly pass existingImages, fall back to current saved images
-      retainedImages = existing.images;
+      retainedImages = existing.images as string[];
     }
 
-    // Delete any old images from Spaces that were removed by the user in frontend
-    const removedImages = existing.images.filter((url) => !retainedImages.includes(url));
+    // Explicitly typed (url: string) on filter callback
+    const removedImages = (existing.images as string[]).filter((url: string) => !retainedImages.includes(url));
     for (const url of removedImages) {
       const key = extractKeyFromUrl(url);
       if (key) {
@@ -157,7 +157,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     }
 
     // Best-effort cleanup of all image files in DigitalOcean Spaces
-    for (const url of existing.images) {
+    for (const url of (existing.images as string[])) {
       const key = extractKeyFromUrl(url);
       if (key) {
         try {
