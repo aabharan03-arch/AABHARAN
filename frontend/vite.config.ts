@@ -37,7 +37,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'https://aabharan-4g0nax65d-aabharan1.vercel.app',
         changeOrigin: true,
         rewrite: (path) => path, // ✅ Keep /api path intact
         configure: (proxy, options) => {

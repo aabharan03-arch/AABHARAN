@@ -50,7 +50,7 @@ export function CustomerProfilePage() {
       }
 
       try {
-        const res = await fetch('http://localhost:3000/api/customer/me', {
+        const res = await fetch('/api/customer/me', {
           method: 'GET',
           headers: { Authorization: `Bearer ${token}` },
         });

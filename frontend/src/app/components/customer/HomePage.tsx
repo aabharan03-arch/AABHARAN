@@ -121,7 +121,7 @@ export function HomePage() {
       }
 
       try {
-        const response = await fetch('/api/customer/products/all');
+        const response = await fetch('https://aabharan-4g0nax65d-aabharan1.vercel.app/api/customer/products/all');
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
         const json = await response.json();

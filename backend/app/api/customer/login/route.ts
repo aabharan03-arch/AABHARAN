@@ -35,7 +35,7 @@ export async function POST(request: Request) {
         token, // ✅ return token in body instead of setting a cookie
         user: { id: customer.id, email: customer.email, name: customer.name },
       },
-      { status: 200, headers: corsHeaders }
+      { status: 204, headers: corsHeaders }
     );
   } catch (error) {
     console.error('LOGIN ROUTE ERROR:', error);

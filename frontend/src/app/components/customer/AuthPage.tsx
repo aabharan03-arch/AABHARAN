@@ -6,7 +6,7 @@ import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from 'lucide-react';
 // Import your logo
 import logo from '../asserts/logo.jpeg';
 
-const API_BASE_URL = 'http://localhost:3000'; // ✅ Direct backend URL
+const API_BASE_URL = 'https://aabharan-4g0nax65d-aabharan1.vercel.app'; // ✅ Direct backend URL
 
 export function AuthPage() {
   const [searchParams] = useSearchParams();
