@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountStatus {
+  ACTIVE
+  RESTRICTED
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // Hashed password
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+model StoreAdmin {
+  id        String        @id @default(uuid())
+  email     String        @unique
+  name      String        @default("Suvarna")
+  password  String        // Hashed password
+  status    AccountStatus @default(ACTIVE)
+
+  // 1-to-1 relationship with Store
+  store     Store?        
+
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  metalTypes MetalType[]
+  categories Category[]
+
+  @@index([email])
+}
+
+model Store {
+  id            String      @id @default(uuid())
+  name          String
+  about         String?     @db.Text
+  logo          String?
+  coverBanner   String?
+  contactNumber String?
+  whatsapp      String?
+  email         String?
+  website       String?
+  
+  // Social Links
+  instagram     String?
+  facebook      String?
+
+  // Relation to StoreAdmin
+  storeAdminId  String      @unique
+  storeAdmin    StoreAdmin  @relation(fields: [storeAdminId], references: [id], onDelete: Cascade)
+
+  // Branches
+  branches      Branch[]
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Branch {
+  id          String   @id @default(uuid())
+  name        String
+  managerName String?
+  phone       String?
+  whatsapp    String?
+  address     String
+  city        String?
+  state       String?
+  pincode     String?
+  lat         Float?   @default(0)
+  lng         Float?   @default(0)
+  mapUrl      String?
+
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([storeId])
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+}
+
+model Product {
+  id           String   @id @default(uuid())
+  name         String
+  category     String
+  metalType    String
+  purity       String
+  weight       String?
+  description  String?
+  featured     Boolean  @default(false)
+  displayOrder Int      @default(1)
+  images       String[] // Array of image URLs
+  views        Int      @default(0)
+
+  storeId      String
+  storeName    String
+  storeLogo    String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([storeId])
+  @@index([category])
+}
+
+
+model MetalType {
+  id           String     @id @default(uuid())
+  name         String     
+  description  String?    
+
+  storeAdminId String
+  storeAdmin   StoreAdmin @relation(fields: [storeAdminId], references: [id], onDelete: Cascade)
+
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([storeAdminId, name])
+}
+
+model Category {
+  id           String     @id @default(uuid())
+  name         String     
+  description  String?
+
+  storeAdminId String
+  storeAdmin   StoreAdmin @relation(fields: [storeAdminId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([storeAdminId, name])
+}
