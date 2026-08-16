@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*', // Adjust to match your frontend domain
+  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
@@ -20,12 +20,12 @@ export async function GET(req: Request) {
       },
     });
 
-    // 2. Collect unique storeIds (which correspond to StoreAdmin IDs)
+    // 2. Collect unique storeIds with explicit typing on both callbacks
     const storeAdminIds = Array.from(
       new Set(
         products
-          .map((p:any) => p.storeId?.trim())
-          .filter((id): id is string => Boolean(id))
+          .map((p: any) => p.storeId?.trim())
+          .filter((id: string | undefined): id is string => Boolean(id))
       )
     );
 
@@ -53,14 +53,14 @@ export async function GET(req: Request) {
     // 4. Map StoreAdmin ID to its Store details for O(1) lookup
     const storeMap = new Map<string, { id: string; name: string; logo: string | null }>();
     
-    for (const sa of storeAdmins) {
+    for (const sa of storeAdmins as any[]) {
       if (sa.store) {
         storeMap.set(sa.id.trim(), sa.store);
       }
     }
 
     // 5. Build clean, product-only response objects
-    const formattedProducts = products.map((product) => {
+    const formattedProducts = products.map((product: any) => {
       const matchedStore = product.storeId ? storeMap.get(product.storeId.trim()) : null;
 
       return {
