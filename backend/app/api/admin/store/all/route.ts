@@ -65,8 +65,7 @@ export async function GET(req: Request) {
     });
 
     // 2. Extract StoreAdmin IDs (Since Product.storeId = decoded.id = StoreAdmin.id)
-    const adminIds = storeAdmins.map((sa) => sa.id);
-
+const adminIds = storeAdmins.map((sa: { id: string }) => sa.id);
     // 3. Fetch products where storeId matches StoreAdmin.id
     const products = adminIds.length > 0
       ? await prisma.product.findMany({
@@ -95,8 +94,8 @@ export async function GET(req: Request) {
     }
 
     // 5. Attach product list into store.products
-    const formattedStoreAdmins = storeAdmins.map((sa) => {
-      const adminProducts = productsByAdminId.get(sa.id.trim()) || [];
+const formattedStoreAdmins = storeAdmins.map((sa: any) => {
+        const adminProducts = productsByAdminId.get(sa.id.trim()) || [];
 
       return {
         ...sa,
