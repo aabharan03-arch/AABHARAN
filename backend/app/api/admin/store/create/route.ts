@@ -67,31 +67,52 @@ export async function POST(req: Request) {
       );
     }
 
-    // 5. Hash Password & Create StoreAdmin
+    // 5. Hash Password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newStoreAdmin = await prisma.storeAdmin.create({
-      data: {
-        email: email.toLowerCase(),
-        password: hashedPassword,
-        name: name,
-        // status automatically defaults to 'ACTIVE' based on your Prisma schema
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        status: true,
-        createdAt: true,
-        // We omit the password for security
-      },
+    // 6. Create StoreAdmin + Store together in a transaction.
+    //    This guarantees every StoreAdmin has exactly one Store from the
+    //    moment they're created, so publicSlug (Store's @default(cuid()))
+    //    is always generated and QR/branch routes never hit a missing store.
+    const { newStoreAdmin, store } = await prisma.$transaction(async (tx) => {
+      const newStoreAdmin = await tx.storeAdmin.create({
+        data: {
+          email: email.toLowerCase(),
+          password: hashedPassword,
+          name: name,
+          // status automatically defaults to 'ACTIVE' based on your Prisma schema
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          status: true,
+          createdAt: true,
+          // We omit the password for security
+        },
+      });
+
+      const store = await tx.store.create({
+        data: {
+          name: name, // placeholder store name — admin can rename later via store settings
+          storeAdminId: newStoreAdmin.id,
+          // publicSlug intentionally omitted — Prisma applies @default(cuid())
+        },
+        select: {
+          id: true,
+          publicSlug: true,
+        },
+      });
+
+      return { newStoreAdmin, store };
     });
 
-    // 6. Return Success Response
+    // 7. Return Success Response
     return NextResponse.json(
       {
         message: 'Store Admin created successfully.',
         storeAdmin: newStoreAdmin,
+        store,
       },
       { status: 201, headers: corsHeaders }
     );

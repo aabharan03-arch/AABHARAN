@@ -5,7 +5,7 @@ import { Home, Package, Store, MessageSquare, LogOut, X } from 'lucide-react';
 import { ENQUIRIES } from '../data/mockData';
 
 // Base API endpoint for store admin actions
-const API_BASE_URL = 'http://localhost:3000/api/storeadmin';
+const API_BASE_URL = 'https://aabharan.vercel.app/api/storeadmin';
 
 // ---------------------------------------------------------------------------
 // Design tokens — shared with DashboardPage (ivory / deep navy / warm gold)

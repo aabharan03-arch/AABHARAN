@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Trash2, MapPin, Phone, Globe, MessageCircle, Mail, Instagram, Facebook, Edit, X, Check, Lock, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, MapPin, Phone, Globe, MessageCircle, Mail, Instagram, Facebook, Edit, X, Check, Lock, AlertCircle, QrCode, Download, RefreshCw, ImageOff } from 'lucide-react';
 import { Eye, EyeOff } from 'lucide-react';
 import {
   fetchStoreSettings,
@@ -12,10 +12,9 @@ import {
 
 // API helper
 export async function changePassword(currentPassword: string, newPassword: string) {
-  const API_BASE_URL = ''; // Ensure your API_BASE_URL is set or imported
   const authHeaders = () => ({ Authorization: `Bearer ${sessionStorage.getItem('storeadmin_token') ?? ''}` });
 
-  const res = await fetch(`${API_BASE_URL}/api/storeadmin/settings/reset-password`, {
+  const res = await fetch(`/api/storeadmin/settings/reset-password`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -31,6 +30,46 @@ export async function changePassword(currentPassword: string, newPassword: strin
 
   const data = await res.json();
   return data.message as string;
+}
+
+// QR Code API helper
+export async function fetchStoreQr(storeId: string) {
+  const authHeaders = () => ({ Authorization: `Bearer ${sessionStorage.getItem('storeadmin_token') ?? ''}` });
+
+  const res = await fetch(`http://10.227.35.232:3000/api/storeadmin/qr/${storeId}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Failed to fetch QR code(${ res.status })`);
+  }
+
+  const data = await res.json();
+  return data.data as { storeId: string; publicSlug: string; qrTargetUrl: string; qrImageUrl: string };
+}
+// Fetches the QR image as a blob and triggers a real file download —
+// a plain <a href> to a cross-origin image URL often just opens a new
+// tab instead of saving the file, since our API doesn't set
+// Content-Disposition: attachment.
+export async function downloadStoreQr(qrImageUrl: string, format: 'png' | 'svg', filename: string) {
+  const res = await fetch(`${ qrImageUrl } ? format = ${ format }`);
+  if (!res.ok) {
+    throw new Error(`Failed to download QR code(${ res.status })`);
+  }
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = `${ filename }.${ format }`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(objectUrl);
 }
 
 export interface Branch {
@@ -63,6 +102,13 @@ export interface Store {
   branches: Branch[];
 }
 
+interface QrData {
+  storeId: string;
+  publicSlug: string;
+  qrTargetUrl: string;
+  qrImageUrl: string;
+}
+
 const T = {
   ivory: '#f9f7ee',
   ivoryShade: '#eeead9',
@@ -81,7 +127,7 @@ const CACHE_KEY = 'store_settings_cache';
 const inputStyle: React.CSSProperties = {
   fontFamily: 'Inter, var(--font-family-sans)',
   backgroundColor: T.ivory,
-  border: `1px solid ${T.ivoryShade}`,
+  border: `1px solid ${ T.ivoryShade }`,
   color: T.navy,
   borderRadius: '10px',
   padding: '10px 12px',
@@ -118,7 +164,7 @@ function ToastContainer({ toasts, onClose }: { toasts: ToastMessage[]; onClose: 
           key={toast.id}
           className="flex items-center justify-between p-4 rounded-xl shadow-lg border transition-all duration-300 animate-slide-in"
           style={{
-            backgroundColor: toast.type === 'success' ? '#ffffff' : '#ffffff',
+            backgroundColor: '#ffffff',
             borderColor: toast.type === 'success' ? T.success : T.danger,
             borderLeftWidth: '5px',
           }}
@@ -159,6 +205,13 @@ export function StorePage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordSaving, setPasswordSaving] = useState(false);
+
+  // QR Code State
+  const [qrData, setQrData] = useState<QrData | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrChecked, setQrChecked] = useState(false); // has the initial status check completed?
+  const [qrImageFailed, setQrImageFailed] = useState(false); // did the <img> itself fail to load?
+  const [qrDownloading, setQrDownloading] = useState<'png' | 'svg' | null>(null);
 
   // Toast System State
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -222,11 +275,33 @@ export function StorePage() {
     loadStore();
   }, [loadStore]);
 
+  // Auto-check whether a QR already exists for this store as soon as it loads,
+  // so we can show the image directly instead of always starting on the button.
+  useEffect(() => {
+    if (!store?.id || qrChecked) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchStoreQr(store.id);
+        if (!cancelled) setQrData(data);
+      } catch {
+        // No QR yet (or a fetch error) — leave qrData null so the Generate button shows.
+      } finally {
+        if (!cancelled) setQrChecked(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [store?.id, qrChecked]);
+
   const TABS = useMemo(() => {
     const branchCount = store?.branches?.length ?? 0;
     return [
       { key: 'info', label: 'Store Information' },
-      { key: 'branches', label: `Branches (${branchCount})` },
+      { key: 'branches', label: `Branches(${ branchCount })` },
     ] as const;
   }, [store?.branches?.length]);
 
@@ -378,6 +453,38 @@ export function StorePage() {
     }
   }
 
+  async function handleGenerateQr() {
+    if (!store) return;
+    try {
+      setQrLoading(true);
+      setError(null);
+      setQrImageFailed(false);
+      const data = await fetchStoreQr(store.id);
+      setQrData(data);
+      triggerToast('QR code generated successfully!');
+    } catch (err: any) {
+      const msg = err.message || 'Failed to generate QR code.';
+      setError(msg);
+      triggerToast(msg, 'error');
+    } finally {
+      setQrLoading(false);
+    }
+  }
+
+  async function handleDownloadQr(format: 'png' | 'svg' = 'png') {
+    if (!qrData) return;
+    const filename = `${ store?.name?.replace(/\s +/g, '-').toLowerCase() ?? 'store'
+} -qr`;
+    try {
+      setQrDownloading(format);
+      await downloadStoreQr(qrData.qrImageUrl, format, filename);
+    } catch (err: any) {
+      triggerToast(err.message || `Failed to download ${ format.toUpperCase() }.`, 'error');
+    } finally {
+      setQrDownloading(null);
+    }
+  }
+
   if (loading) {
     return <StorePageSkeleton />;
   }
@@ -388,7 +495,7 @@ export function StorePage() {
         <p style={{ color: T.danger, fontSize: '14px' }}>{error || 'Unable to load store data.'}</p>
         <button
           onClick={() => loadStore(true)}
-          style={{ marginTop: '12px', fontSize: '13px', color: T.navy, backgroundColor: T.ivory, border: `1px solid ${T.ivoryShade}`, padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}
+          style={{ marginTop: '12px', fontSize: '13px', color: T.navy, backgroundColor: T.ivory, border: `1px solid ${ T.ivoryShade } `, padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}
         >
           Retry
         </button>
@@ -401,7 +508,6 @@ export function StorePage() {
       {/* Toast Render */}
       <ToastContainer toasts={toasts} onClose={removeToast} />
 
-      {/* Sticky Fixed Header */}
       {/* Sticky Fixed Header */}
       <div
         className="sticky top-0 z-30 border-b border-[#eeead9] -mx-6 px-6 sm:-mx-8 sm:px-8 -mt-6 pt-6 pb-4"
@@ -426,7 +532,7 @@ export function StorePage() {
       )}
 
       {/* Tab Bar */}
-      <div className="flex gap-xl" style={{ borderBottom: `1px solid ${T.ivoryShade}` }}>
+      <div className="flex gap-xl" style={{ borderBottom: `1px solid ${ T.ivoryShade } ` }}>
         {TABS.map(tab => {
           const active = activeTab === tab.key;
           return (
@@ -440,7 +546,7 @@ export function StorePage() {
                 fontSize: '13.5px',
                 fontWeight: 600,
                 color: active ? T.navy : T.muted,
-                borderBottom: `2px solid ${active ? T.gold : 'transparent'}`,
+                borderBottom: `2px solid ${ active ? T.gold : 'transparent' } `,
                 marginBottom: '-1px',
                 background: 'none',
                 cursor: 'pointer',
@@ -456,11 +562,11 @@ export function StorePage() {
       {activeTab === 'info' && (
         <div className="flex flex-col gap-xl max-w-3xl">
           {/* Logo & Banner */}
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${T.ivoryShade}` }}>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${ T.ivoryShade } ` }}>
             <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '16px', fontWeight: 500, color: T.navy, marginBottom: '18px' }}>Brand Assets</h2>
             <div className="flex flex-col gap-lg">
               <div className="flex items-center gap-xl">
-                <div style={{ width: '64px', height: '64px', borderRadius: '50%', overflow: 'hidden', border: `2px solid ${T.ivoryShade}`, flexShrink: 0, backgroundColor: T.ivory }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '50%', overflow: 'hidden', border: `2px solid ${ T.ivoryShade } `, flexShrink: 0, backgroundColor: T.ivory }}>
                   {store.logo ? <img src={store.logo} alt="Logo" className="w-full h-full object-cover" /> : null}
                 </div>
                 <div>
@@ -477,7 +583,7 @@ export function StorePage() {
                     htmlFor="logo-upload-input"
                     style={{
                       fontSize: '12.5px', fontWeight: 600, color: T.navy, backgroundColor: T.ivory,
-                      border: `1px solid ${T.ivoryShade}`, borderRadius: '8px', padding: '7px 14px',
+                      border: `1px solid ${ T.ivoryShade } `, borderRadius: '8px', padding: '7px 14px',
                       cursor: saving ? 'not-allowed' : 'pointer', display: 'inline-block', opacity: saving ? 0.6 : 1,
                     }}
                   >
@@ -487,7 +593,7 @@ export function StorePage() {
               </div>
 
               <div>
-                <div style={{ height: '112px', borderRadius: '12px', overflow: 'hidden', border: `1px solid ${T.ivoryShade}`, marginBottom: '8px', backgroundColor: T.ivory }}>
+                <div style={{ height: '112px', borderRadius: '12px', overflow: 'hidden', border: `1px solid ${ T.ivoryShade } `, marginBottom: '8px', backgroundColor: T.ivory }}>
                   {store.coverBanner ? <img src={store.coverBanner} alt="Banner" className="w-full h-full object-cover" /> : null}
                 </div>
                 <p style={{ fontSize: '12px', color: T.muted, marginBottom: '8px' }}>Recommended: 1200×400px, JPG</p>
@@ -502,7 +608,7 @@ export function StorePage() {
                   htmlFor="banner-upload-input"
                   style={{
                     fontSize: '12.5px', fontWeight: 600, color: T.navy, backgroundColor: T.ivory,
-                    border: `1px solid ${T.ivoryShade}`, borderRadius: '8px', padding: '7px 14px',
+                    border: `1px solid ${ T.ivoryShade } `, borderRadius: '8px', padding: '7px 14px',
                     cursor: saving ? 'not-allowed' : 'pointer', display: 'inline-block', opacity: saving ? 0.6 : 1,
                   }}
                 >
@@ -513,7 +619,7 @@ export function StorePage() {
           </div>
 
           {/* Basic Info */}
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${T.ivoryShade}` }}>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${ T.ivoryShade } ` }}>
             <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '16px', fontWeight: 500, color: T.navy, marginBottom: '18px' }}>Basic Information</h2>
             <div className="flex flex-col gap-lg">
               <div>
@@ -528,7 +634,7 @@ export function StorePage() {
           </div>
 
           {/* Contact */}
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${T.ivoryShade}` }}>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${ T.ivoryShade } ` }}>
             <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '16px', fontWeight: 500, color: T.navy, marginBottom: '18px' }}>Contact Information</h2>
             <div className="flex flex-col gap-lg">
               <div className="flex gap-lg flex-col sm:flex-row">
@@ -543,7 +649,7 @@ export function StorePage() {
           </div>
 
           {/* Social Links */}
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${T.ivoryShade}` }}>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${ T.ivoryShade } ` }}>
             <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '16px', fontWeight: 500, color: T.navy, marginBottom: '18px' }}>Social Media</h2>
             <div className="flex flex-col gap-lg">
               <Field
@@ -561,6 +667,123 @@ export function StorePage() {
             </div>
           </div>
 
+          {/* QR Code Card */}
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${ T.ivoryShade } ` }}>
+            <div className="flex items-center gap-sm" style={{ marginBottom: '18px' }}>
+              <QrCode size={18} color={T.gold} />
+              <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '16px', fontWeight: 500, color: T.navy }}>
+                Store QR Code
+              </h2>
+            </div>
+
+            {!qrChecked ? (
+              // Still checking whether a QR already exists for this store
+              <div className="flex items-center gap-sm">
+                <div style={{ width: '16px', height: '16px', border: `2px solid ${ T.ivoryShade } `, borderTopColor: T.gold, borderRadius: '50%' }} className="animate-spin" />
+                <p style={{ fontSize: '13px', color: T.muted }}>Checking QR status...</p>
+              </div>
+            ) : !qrData ? (
+              // No QR yet — show the Generate button
+              <div className="flex flex-col items-start gap-md">
+                <p style={{ fontSize: '13px', color: T.muted, lineHeight: 1.6 }}>
+                  Generate a QR code that customers can scan to instantly visit your store page.
+                </p>
+                <button
+                  onClick={handleGenerateQr}
+                  disabled={qrLoading}
+                  className="flex items-center gap-xs"
+                  style={{
+                    fontSize: '13px', fontWeight: 600, color: T.gold, backgroundColor: T.navy,
+                    border: 'none', borderRadius: '10px', padding: '10px 20px',
+                    cursor: qrLoading ? 'not-allowed' : 'pointer', opacity: qrLoading ? 0.7 : 1,
+                  }}
+                >
+                  <QrCode size={15} />
+                  {qrLoading ? 'Generating...' : 'Generate QR Code'}
+                </button>
+              </div>
+            ) : (
+              // QR already exists — show the image, hide the Generate button
+              <div className="flex flex-col sm:flex-row items-start gap-xl">
+                <div
+                  style={{
+                    width: '160px', height: '160px', borderRadius: '12px', overflow: 'hidden',
+                    border: `1px solid ${ T.ivoryShade } `, backgroundColor: T.ivory,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}
+                >
+                  {qrImageFailed ? (
+                    <div className="flex flex-col items-center gap-xs" style={{ padding: '12px', textAlign: 'center' }}>
+                      <ImageOff size={22} color={T.muted} />
+                      <p style={{ fontSize: '11px', color: T.muted }}>Couldn't load QR image</p>
+                      <button
+                        onClick={() => setQrImageFailed(false)}
+                        style={{ fontSize: '11px', fontWeight: 600, color: T.navy, backgroundColor: '#fff', border: `1px solid ${ T.ivoryShade } `, borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : (
+                    <img
+                      // cache-bust so a Refresh re-fetches instead of showing a stale
+                      // browser-cached image at the same URL
+                      src={`${ qrData.qrImageUrl }?t = ${ qrData.publicSlug } `}
+                      alt="Store QR Code"
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                      onError={() => setQrImageFailed(true)}
+                    />
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-md" style={{ flex: 1, minWidth: 0 }}>
+                  <div>
+                    <p style={{ fontSize: '11px', color: T.muted, marginBottom: '4px' }}>Scan target URL</p>
+                    <p style={{ fontSize: '13px', color: T.navy, wordBreak: 'break-all' }}>{qrData.qrTargetUrl}</p>
+                  </div>
+
+                  <div className="flex gap-sm flex-wrap">
+                    <button
+                      onClick={() => handleDownloadQr('png')}
+                      disabled={qrDownloading !== null}
+                      className="flex items-center gap-xs"
+                      style={{
+                        fontSize: '12.5px', fontWeight: 600, color: T.navy, backgroundColor: T.ivory,
+                        border: `1px solid ${ T.ivoryShade } `, borderRadius: '8px', padding: '8px 16px',
+                        cursor: qrDownloading !== null ? 'not-allowed' : 'pointer', opacity: qrDownloading !== null ? 0.7 : 1,
+                      }}
+                    >
+                      <Download size={13} /> {qrDownloading === 'png' ? 'Downloading...' : 'PNG'}
+                    </button>
+                    <button
+                      onClick={() => handleDownloadQr('svg')}
+                      disabled={qrDownloading !== null}
+                      className="flex items-center gap-xs"
+                      style={{
+                        fontSize: '12.5px', fontWeight: 600, color: T.navy, backgroundColor: T.ivory,
+                        border: `1px solid ${ T.ivoryShade } `, borderRadius: '8px', padding: '8px 16px',
+                        cursor: qrDownloading !== null ? 'not-allowed' : 'pointer', opacity: qrDownloading !== null ? 0.7 : 1,
+                      }}
+                    >
+                      <Download size={13} /> {qrDownloading === 'svg' ? 'Downloading...' : 'SVG'}
+                    </button>
+                    <button
+                      onClick={handleGenerateQr}
+                      disabled={qrLoading}
+                      className="flex items-center gap-xs"
+                      style={{
+                        fontSize: '12.5px', fontWeight: 600, color: T.muted, backgroundColor: '#fff',
+                        border: `1px solid ${ T.ivoryShade } `, borderRadius: '8px', padding: '8px 16px',
+                        cursor: qrLoading ? 'not-allowed' : 'pointer', opacity: qrLoading ? 0.7 : 1,
+                      }}
+                    >
+                      <RefreshCw size={13} /> {qrLoading ? 'Refreshing...' : 'Refresh'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end">
             <button
               onClick={handleSaveStore}
@@ -572,7 +795,7 @@ export function StorePage() {
           </div>
 
           {/* Change Password Card Section */}
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${T.ivoryShade}` }}>
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${ T.ivoryShade } ` }}>
             <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '16px', fontWeight: 500, color: T.navy, marginBottom: '18px' }}>
               Change Password
             </h2>
@@ -615,7 +838,7 @@ export function StorePage() {
                     fontWeight: 600,
                     color: T.navy,
                     backgroundColor: T.ivory,
-                    border: `1px solid ${T.ivoryShade}`,
+                    border: `1px solid ${ T.ivoryShade } `,
                     borderRadius: '10px',
                     padding: '10px 20px',
                     cursor: passwordSaving ? 'not-allowed' : 'pointer',
@@ -644,12 +867,12 @@ export function StorePage() {
           </div>
 
           {store.branches.length === 0 ? (
-            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '32px', border: `1px solid ${T.ivoryShade}`, textAlign: 'center' }}>
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '32px', border: `1px solid ${ T.ivoryShade } `, textAlign: 'center' }}>
               <p style={{ color: T.muted, fontSize: '14px' }}>No branches added yet.</p>
             </div>
           ) : (
             store.branches.map(branch => (
-              <div key={branch.id} style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${T.ivoryShade}` }}>
+              <div key={branch.id} style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${ T.ivoryShade } ` }}>
                 <div className="flex items-start justify-between gap-md" style={{ marginBottom: '18px' }}>
                   <div>
                     <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: '17px', fontWeight: 500, color: T.navy }}>{branch.name}</h3>
@@ -659,14 +882,14 @@ export function StorePage() {
                     <button
                       onClick={() => setEditBranch(branch)}
                       className="flex items-center justify-center transition-colors"
-                      style={{ width: '34px', height: '34px', borderRadius: '9px', backgroundColor: T.ivory, border: `1px solid ${T.ivoryShade}`, cursor: 'pointer' }}
+                      style={{ width: '34px', height: '34px', borderRadius: '9px', backgroundColor: T.ivory, border: `1px solid ${ T.ivoryShade } `, cursor: 'pointer' }}
                     >
                       <Edit size={15} color={T.navy} />
                     </button>
                     <button
                       onClick={() => setBranchToDelete(branch)}
                       className="flex items-center justify-center transition-colors"
-                      style={{ width: '34px', height: '34px', borderRadius: '9px', backgroundColor: T.dangerSoft, border: `1px solid ${T.dangerSoft}`, cursor: 'pointer' }}
+                      style={{ width: '34px', height: '34px', borderRadius: '9px', backgroundColor: T.dangerSoft, border: `1px solid ${ T.dangerSoft } `, cursor: 'pointer' }}
                     >
                       <Trash2 size={15} color={T.danger} />
                     </button>
@@ -679,7 +902,7 @@ export function StorePage() {
                   </div>
                   <div style={{ backgroundColor: T.ivory, borderRadius: '10px', padding: '12px' }}>
                     <p style={{ fontSize: '11px', color: T.muted, marginBottom: '4px' }}>City & State</p>
-                    <p style={{ fontSize: '13px', color: T.navy }}>{branch.city ?? '-'}{branch.state ? `, ${branch.state}` : ''}</p>
+                    <p style={{ fontSize: '13px', color: T.navy }}>{branch.city ?? '-'}{branch.state ? `, ${ branch.state } ` : ''}</p>
                   </div>
                   <div style={{ backgroundColor: T.ivory, borderRadius: '10px', padding: '12px' }}>
                     <p style={{ fontSize: '11px', color: T.muted, marginBottom: '4px' }}>Phone</p>
@@ -710,9 +933,9 @@ export function StorePage() {
         >
           <div
             onClick={e => e.stopPropagation()}
-            style={{ backgroundColor: '#ffffff', borderRadius: '20px', width: '100%', maxWidth: '420px', border: `1px solid ${T.ivoryShade}`, boxShadow: '0 24px 60px rgba(4, 9, 30, 0.25)' }}
+            style={{ backgroundColor: '#ffffff', borderRadius: '20px', width: '100%', maxWidth: '420px', border: `1px solid ${ T.ivoryShade } `, boxShadow: '0 24px 60px rgba(4, 9, 30, 0.25)' }}
           >
-            <div className="flex items-center justify-between" style={{ padding: '20px 24px', borderBottom: `1px solid ${T.ivoryShade}` }}>
+            <div className="flex items-center justify-between" style={{ padding: '20px 24px', borderBottom: `1px solid ${ T.ivoryShade } ` }}>
               <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '18px', fontWeight: 500, color: T.navy }}>Delete Branch</h2>
               <button
                 onClick={() => setBranchToDelete(null)}
@@ -727,10 +950,10 @@ export function StorePage() {
                 Are you sure you want to delete the <strong style={{ color: T.navy, fontWeight: 600 }}>{branchToDelete.name}</strong> branch? This action cannot be undone.
               </p>
             </div>
-            <div className="flex items-center justify-end gap-md" style={{ padding: '16px 24px', borderTop: `1px solid ${T.ivoryShade}` }}>
+            <div className="flex items-center justify-end gap-md" style={{ padding: '16px 24px', borderTop: `1px solid ${ T.ivoryShade } ` }}>
               <button
                 onClick={() => setBranchToDelete(null)}
-                style={{ fontSize: '13px', fontWeight: 500, color: T.navy, backgroundColor: '#fff', border: `1px solid ${T.ivoryShade}`, borderRadius: '10px', padding: '10px 18px', cursor: 'pointer' }}
+                style={{ fontSize: '13px', fontWeight: 500, color: T.navy, backgroundColor: '#fff', border: `1px solid ${ T.ivoryShade } `, borderRadius: '10px', padding: '10px 18px', cursor: 'pointer' }}
               >
                 Cancel
               </button>
@@ -760,13 +983,13 @@ function StorePageSkeleton() {
         <div style={{ height: '14px', width: '280px', backgroundColor: T.ivoryShade, borderRadius: '4px' }} />
       </div>
 
-      <div className="flex gap-xl" style={{ borderBottom: `1px solid ${T.ivoryShade}`, paddingBottom: '12px' }}>
+      <div className="flex gap-xl" style={{ borderBottom: `1px solid ${ T.ivoryShade } `, paddingBottom: '12px' }}>
         <div style={{ height: '20px', width: '130px', backgroundColor: T.ivoryShade, borderRadius: '4px' }} />
         <div style={{ height: '20px', width: '100px', backgroundColor: T.ivoryShade, borderRadius: '4px' }} />
       </div>
 
       <div className="flex flex-col gap-xl max-w-3xl">
-        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${T.ivoryShade}` }}>
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${ T.ivoryShade } ` }}>
           <div style={{ height: '18px', width: '120px', backgroundColor: T.ivoryShade, borderRadius: '4px', marginBottom: '18px' }} />
           <div className="flex flex-col gap-lg">
             <div className="flex items-center gap-xl">
@@ -784,7 +1007,7 @@ function StorePageSkeleton() {
           </div>
         </div>
 
-        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${T.ivoryShade}` }}>
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '22px', border: `1px solid ${ T.ivoryShade } ` }}>
           <div style={{ height: '18px', width: '140px', backgroundColor: T.ivoryShade, borderRadius: '4px', marginBottom: '18px' }} />
           <div className="flex flex-col gap-lg">
             <div style={{ height: '38px', backgroundColor: T.ivoryShade, borderRadius: '10px' }} />
@@ -829,16 +1052,16 @@ function BranchFormModal({ isOpen, branch, onClose, onSave, saving }: {
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ backgroundColor: '#ffffff', borderRadius: '20px', width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', border: `1px solid ${T.ivoryShade}`, boxShadow: '0 24px 60px rgba(4, 9, 30, 0.25)' }}
+        style={{ backgroundColor: '#ffffff', borderRadius: '20px', width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', border: `1px solid ${ T.ivoryShade } `, boxShadow: '0 24px 60px rgba(4, 9, 30, 0.25)' }}
       >
-        <div className="flex items-center justify-between" style={{ padding: '22px 26px', borderBottom: `1px solid ${T.ivoryShade}` }}>
+        <div className="flex items-center justify-between" style={{ padding: '22px 26px', borderBottom: `1px solid ${ T.ivoryShade } ` }}>
           <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '20px', fontWeight: 500, color: T.navy }}>
             {branch ? 'Edit Branch' : 'Add New Branch'}
           </h2>
           <button
             onClick={onClose}
             aria-label="Close"
-            style={{ width: '30px', height: '30px', borderRadius: '8px', display: 'flex', items: 'center', justifyContent: 'center', backgroundColor: T.ivory, border: 'none', cursor: 'pointer' }}
+            style={{ width: '30px', height: '30px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: T.ivory, border: 'none', cursor: 'pointer' }}
           >
             <X size={16} color={T.navy} />
           </button>
@@ -876,7 +1099,7 @@ function BranchFormModal({ isOpen, branch, onClose, onSave, saving }: {
               onChange={e => setForm(f => ({ ...f, lng: parseFloat(e.target.value) || 0 }))}
             />
           </div>
-          <div className="flex items-start gap-md" style={{ backgroundColor: T.ivory, borderRadius: '12px', padding: '16px', border: `1px solid ${T.ivoryShade}` }}>
+          <div className="flex items-start gap-md" style={{ backgroundColor: T.ivory, borderRadius: '12px', padding: '16px', border: `1px solid ${ T.ivoryShade } ` }}>
             <MapPin size={18} color={T.gold} style={{ flexShrink: 0, marginTop: '1px' }} />
             <p style={{ fontSize: '12.5px', color: T.muted, lineHeight: 1.55 }}>
               Enter latitude and longitude to enable Google Maps integration. You can find these from Google Maps by right-clicking on the location.
@@ -884,10 +1107,10 @@ function BranchFormModal({ isOpen, branch, onClose, onSave, saving }: {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-md" style={{ padding: '18px 26px', borderTop: `1px solid ${T.ivoryShade}` }}>
+        <div className="flex items-center justify-end gap-md" style={{ padding: '18px 26px', borderTop: `1px solid ${ T.ivoryShade } ` }}>
           <button
             onClick={onClose}
-            style={{ fontSize: '13px', fontWeight: 500, color: T.navy, backgroundColor: '#fff', border: `1px solid ${T.ivoryShade}`, borderRadius: '10px', padding: '10px 18px', cursor: 'pointer' }}
+            style={{ fontSize: '13px', fontWeight: 500, color: T.navy, backgroundColor: '#fff', border: `1px solid ${ T.ivoryShade } `, borderRadius: '10px', padding: '10px 18px', cursor: 'pointer' }}
           >
             Cancel
           </button>

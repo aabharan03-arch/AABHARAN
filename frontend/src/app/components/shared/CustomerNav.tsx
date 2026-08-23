@@ -50,7 +50,7 @@ export function CustomerNav() {
       }
 
       try {
-        const res = await fetch('http://localhost:3000/api/customer/me', {
+        const res = await fetch('/api/customer/me', {
           method: 'GET',
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -113,7 +113,7 @@ export function CustomerNav() {
       const token = localStorage.getItem('token');
 
       if (token) {
-        await fetch('http://localhost:3000/api/customer/logout', {
+        await fetch('/api/customer/logout', {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         });

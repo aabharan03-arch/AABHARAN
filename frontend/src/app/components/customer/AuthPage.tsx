@@ -34,7 +34,7 @@ export function AuthPage() {
 
     try {
       if (tab === 'login') {
-        const response = await fetch(`${API_BASE_URL}/api/customer/login`, {
+        const response = await fetch(`/api/customer/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: form.email, password: form.password }),
@@ -52,7 +52,7 @@ export function AuthPage() {
 
         navigate('/');
       } else {
-        const response = await fetch(`${API_BASE_URL}/api/customer/signup`, {
+        const response = await fetch(`api/customer/signup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include', // ✅ Send cookies

@@ -261,7 +261,7 @@ function ProfileTab({ user, setUser }: ProfileTabProps) {
         payload.newPassword = form.newPassword;
       }
 
-      const response = await fetch('http://localhost:3000/api/customer/update', {
+      const response = await fetch('api/customer/update', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

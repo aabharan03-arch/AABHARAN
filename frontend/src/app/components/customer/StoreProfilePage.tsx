@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { EnquiryModal } from '../shared/EnquiryModal';
 
-// Types representing your live API response structure
 export interface Branch {
   id: string;
   name: string;
@@ -70,25 +69,15 @@ export interface StoreData {
   updatedAt?: string;
   branches: Branch[];
   products: Product[];
-  gallery?: string[];
-}
-
-export interface StoreAdmin {
-  id: string;
-  name: string;
-  email: string;
-  status: string;
-  createdAt?: string;
-  updatedAt?: string;
-  store: StoreData | null;
 }
 
 export function StoreProfilePage() {
-  const { storeId } = useParams();
+  // Route can be either /stores/:storeId (internal links) or /s/:slug (QR scans)
+  const { storeId, slug } = useParams();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [storeAdmin, setStoreAdmin] = useState<StoreAdmin | null>(null);
+  const [store, setStore] = useState<StoreData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'products' | 'gallery' | 'branches'>('products');
@@ -105,23 +94,36 @@ export function StoreProfilePage() {
         setLoading(true);
         setError(null);
 
-        // Fetch store list or singular endpoint
-        const res = await fetch('/api/admin/store/all');
+        // Slug-based (QR / public) vs id-based (internal links) fetch a
+        // different endpoint — slug is public and unauthenticated.
+        const url = slug
+          ? `http://localhost:3000/api/store/public/${slug}`
+          : `/api/admin/store/all`; // fallback for existing :storeId internal links
+
+        const res = await fetch(url);
         const data = await res.json();
 
         if (!isMounted) return;
 
+        if (slug) {
+          if (res.ok && data.data) {
+            setStore(data.data);
+            document.title = `${data.data.name} | Store Profile`;
+          } else {
+            setError(data.error || 'Store profile not found');
+          }
+          return;
+        }
+
+        // Legacy path: matching against the admin list by storeId
         if (data.success && Array.isArray(data.storeAdmins)) {
-          // Matches store by StoreAdmin ID or nested Store ID
           const matchedAdmin = data.storeAdmins.find(
-            (sa: StoreAdmin) => sa.id === storeId || sa.store?.id === storeId
+            (sa: any) => sa.id === storeId || sa.store?.id === storeId
           );
 
-          if (matchedAdmin) {
-            setStoreAdmin(matchedAdmin);
-            if (matchedAdmin.store?.name) {
-              document.title = `${matchedAdmin.store.name} | Store Profile`;
-            }
+          if (matchedAdmin?.store) {
+            setStore(matchedAdmin.store);
+            document.title = `${matchedAdmin.store.name} | Store Profile`;
           } else {
             setError('Store profile not found');
           }
@@ -138,17 +140,17 @@ export function StoreProfilePage() {
       }
     }
 
-    if (storeId) {
+    if (slug || storeId) {
       fetchStoreData();
     } else {
       setLoading(false);
-      setError('Invalid Store Identifier');
+      setError('Invalid Store Link');
     }
 
     return () => {
       isMounted = false;
     };
-  }, [storeId]);
+  }, [storeId, slug]);
 
   if (loading) {
     return (
@@ -161,9 +163,7 @@ export function StoreProfilePage() {
     );
   }
 
-  const store = storeAdmin?.store;
-
-  if (!storeAdmin || !store || error) {
+  if (!store || error) {
     return (
       <div className="bg-[#f9f7ee] min-h-screen flex items-center justify-center px-4" style={{ fontFamily: 'var(--font-family-sans)' }}>
         <div className="text-center bg-white p-8 md:p-12 rounded-[24px] shadow-sm border border-gray-200 max-w-md w-full">
@@ -196,10 +196,8 @@ export function StoreProfilePage() {
   const storeCategories = ['All', ...Array.from(new Set(rawProducts.map(p => p.category).filter(Boolean)))];
   const storeMetalTypes = ['All', ...Array.from(new Set(rawProducts.map(p => p.metalType).filter(Boolean)))];
 
-  // Gallery Array Extraction
-  const galleryImages: string[] = store.gallery && store.gallery.length > 0
-    ? store.gallery
-    : Array.from(new Set(rawProducts.flatMap(p => p.images || [])));
+  // No dedicated gallery field on Store — derive from product images
+  const galleryImages: string[] = Array.from(new Set(rawProducts.flatMap(p => p.images || [])));
 
   // Branch location fallback
   const cityLocation = branches[0]?.city || 'Location Unavailable';

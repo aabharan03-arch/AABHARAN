@@ -101,7 +101,7 @@ export default function CategoriesPage() {
 
     try {
       const token = getAuthToken();
-      const res = await fetch('http://localhost:3000/api/storeadmin/categories', {
+      const res = await fetch('api/storeadmin/categories', {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -172,8 +172,8 @@ export default function CategoriesPage() {
     const token = getAuthToken();
     const isEdit = !!editingCategory;
     const url = isEdit 
-      ? `http://localhost:3000/api/storeadmin/categories/${editingCategory.id}` 
-      : 'http://localhost:3000/api/storeadmin/categories';
+      ? `/api/storeadmin/categories/${editingCategory.id}` 
+      : '/api/storeadmin/categories';
     const method = isEdit ? 'PUT' : 'POST';
 
     try {
@@ -220,7 +220,7 @@ export default function CategoriesPage() {
 
     const token = getAuthToken();
     try {
-      const res = await fetch(`http://localhost:3000/api/storeadmin/categories/${categoryToDelete.id}`, {
+      const res = await fetch(`/api/storeadmin/categories/${categoryToDelete.id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,

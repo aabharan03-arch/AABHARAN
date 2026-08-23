@@ -101,7 +101,7 @@ export default function MetalTypesPage() {
 
     try {
       const token = getAuthToken();
-      const res = await fetch('http://localhost:3000/api/storeadmin/metal-types', {
+      const res = await fetch('/api/storeadmin/metal-types', {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -172,8 +172,8 @@ export default function MetalTypesPage() {
     const token = getAuthToken();
     const isEdit = !!editingMetalType;
     const url = isEdit 
-      ? `http://localhost:3000/api/storeadmin/metal-types/${editingMetalType.id}` 
-      : 'http://localhost:3000/api/storeadmin/metal-types';
+      ? `/api/storeadmin/metal-types/${editingMetalType.id}` 
+      : '/api/storeadmin/metal-types';
     const method = isEdit ? 'PUT' : 'POST';
 
     try {
@@ -220,7 +220,7 @@ export default function MetalTypesPage() {
 
     const token = getAuthToken();
     try {
-      const res = await fetch(`http://localhost:3000/api/storeadmin/metal-types/${metalTypeToDelete.id}`, {
+      const res = await fetch(`/api/storeadmin/metal-types/${metalTypeToDelete.id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,

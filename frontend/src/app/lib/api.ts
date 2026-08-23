@@ -1,5 +1,5 @@
 // lib/api.ts
-export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+export const API_BASE_URL= 'https://aabharan.vercel.app';
 const PRODUCTS_PATH = '/api/storeadmin/products';
 const SETTINGS_PATH = '/api/storeadmin/settings';
 
@@ -70,7 +70,7 @@ export async function updateStoreSettings(payload: {
 // Add/replace this function in lib/api.ts
 
 export async function updateStoreAssets(formData: FormData) {
-  const res = await fetch(`${API_BASE_URL}/api/storeadmin/settings/assets`, {
+  const res = await fetch(`/api/storeadmin/settings/assets`, {
     method: 'POST',
     headers: { ...authHeaders() }, // no Content-Type — browser sets multipart boundary
     body: formData,

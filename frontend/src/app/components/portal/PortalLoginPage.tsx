@@ -7,7 +7,7 @@ import { Mail, Lock, Store, ArrowLeft, ArrowRight, Eye, EyeOff, CheckCircle2 } f
 import logo from '../asserts/logo.jpeg'; 
 
 // Set your backend base URL (adjust if running on a custom port/domain)
-const API_BASE_URL = 'http://localhost:3000/api/storeadmin';
+const API_BASE_URL = 'https://aabharan.vercel.app/api/storeadmin';
 
 export function PortalLoginPage() {
   const [form, setForm] = useState({ email: '', password: '' });
