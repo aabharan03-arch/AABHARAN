@@ -16,6 +16,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { EnquiryModal } from '../shared/EnquiryModal';
+import { API_BASE_URL } from '../../lib/api';
 
 export interface Branch {
   id: string;
@@ -97,8 +98,8 @@ export function StoreProfilePage() {
         // Slug-based (QR / public) vs id-based (internal links) fetch a
         // different endpoint — slug is public and unauthenticated.
         const url = slug
-          ? `http://localhost:3000/api/store/public/${slug}`
-          : `/api/admin/store/all`; // fallback for existing :storeId internal links
+          ? `${API_BASE_URL}/api/store/public/${slug}`
+          : `${API_BASE_URL}/api/admin/store/all`; // fallback for existing :storeId internal links
 
         const res = await fetch(url);
         const data = await res.json();

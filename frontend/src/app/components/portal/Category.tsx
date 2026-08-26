@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Search
 } from 'lucide-react';
+import { API_BASE_URL } from '../../lib/api';
 
 interface Category {
   id: string;
@@ -101,7 +102,7 @@ export default function CategoriesPage() {
 
     try {
       const token = getAuthToken();
-      const res = await fetch('api/storeadmin/categories', {
+      const res = await fetch(`${API_BASE_URL}/api/storeadmin/categories`, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -172,8 +173,8 @@ export default function CategoriesPage() {
     const token = getAuthToken();
     const isEdit = !!editingCategory;
     const url = isEdit 
-      ? `/api/storeadmin/categories/${editingCategory.id}` 
-      : '/api/storeadmin/categories';
+      ? `${API_BASE_URL}/api/storeadmin/categories/${editingCategory.id}` 
+      : `${API_BASE_URL}/api/storeadmin/categories`;
     const method = isEdit ? 'PUT' : 'POST';
 
     try {
@@ -220,7 +221,7 @@ export default function CategoriesPage() {
 
     const token = getAuthToken();
     try {
-      const res = await fetch(`/api/storeadmin/categories/${categoryToDelete.id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/storeadmin/categories/${categoryToDelete.id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,

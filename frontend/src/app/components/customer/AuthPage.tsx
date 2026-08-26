@@ -6,7 +6,7 @@ import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from 'lucide-react';
 // Import your logo
 import logo from '../asserts/logo.jpeg';
 
-const API_BASE_URL = 'https://aabharan-4g0nax65d-aabharan1.vercel.app'; // ✅ Direct backend URL
+const API_BASE_URL = 'https://aabharan.vercel.app'; // ✅ Direct backend URL
 
 export function AuthPage() {
   const [searchParams] = useSearchParams();
@@ -34,7 +34,7 @@ export function AuthPage() {
 
     try {
       if (tab === 'login') {
-        const response = await fetch(`/api/customer/login`, {
+        const response = await fetch(`${API_BASE_URL}/api/customer/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: form.email, password: form.password }),
@@ -52,7 +52,7 @@ export function AuthPage() {
 
         navigate('/');
       } else {
-        const response = await fetch(`api/customer/signup`, {
+        const response = await fetch(`${API_BASE_URL}/api/customer/signup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include', // ✅ Send cookies

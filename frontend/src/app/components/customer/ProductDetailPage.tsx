@@ -13,6 +13,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { EnquiryModal } from '../shared/EnquiryModal';
+import { API_BASE_URL } from '../../lib/api';
 
 // --- TYPE DEFINITIONS ---
 
@@ -105,7 +106,7 @@ export function ProductDetailPage() {
         }
 
         if (fetchedProducts.length === 0) {
-          const res = await fetch('/api/customer/products/all');
+          const res = await fetch(`${API_BASE_URL}/api/customer/products/all`);
           if (res.ok) {
             const json = await res.json();
             const prodList = json.success && Array.isArray(json.products) ? json.products : Array.isArray(json) ? json : [];
@@ -130,7 +131,7 @@ export function ProductDetailPage() {
         }
 
         if (fetchedStores.length === 0) {
-          const res = await fetch('/api/admin/store/all');
+          const res = await fetch(`${API_BASE_URL}/api/admin/store/all`);
           if (res.ok) {
             const json = await res.json();
             if (json.success && Array.isArray(json.storeAdmins)) {

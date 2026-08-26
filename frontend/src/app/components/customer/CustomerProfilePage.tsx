@@ -13,6 +13,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { PRODUCTS } from '../data/mockData';
+import { API_BASE_URL } from '../../lib/api';
 
 type Tab = 'profile' | 'Liked-products';
 
@@ -50,7 +51,7 @@ export function CustomerProfilePage() {
       }
 
       try {
-        const res = await fetch('/api/customer/me', {
+        const res = await fetch(`${API_BASE_URL}/api/customer/me`, {
           method: 'GET',
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -261,7 +262,7 @@ function ProfileTab({ user, setUser }: ProfileTabProps) {
         payload.newPassword = form.newPassword;
       }
 
-      const response = await fetch('api/customer/update', {
+      const response = await fetch(`${API_BASE_URL}/api/customer/update`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

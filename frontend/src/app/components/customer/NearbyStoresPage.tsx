@@ -5,6 +5,7 @@ import { MapPin, Phone, Navigation, Search, Store, ArrowLeft, ChevronRight, Aler
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { API_BASE_URL } from '../../lib/api';
 
 // ---------------------------------------------------------------------------
 // Types — matches the /api/store-admins response shape (public, no auth
@@ -272,7 +273,7 @@ export default function NearbyStoresPage() {
       if (!cached) setLoading(true);
       setError(null);
       try {
-        const res = await fetch('/api/admin/store/all', { signal: controller.signal });
+        const res = await fetch(`${API_BASE_URL}/api/admin/store/all`, { signal: controller.signal });
         if (!res.ok) throw new Error(`Request failed (${res.status})`);
         const json: ApiResponse = await res.json();
         if (!json.success) throw new Error('API returned an error');

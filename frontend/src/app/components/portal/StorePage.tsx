@@ -8,13 +8,14 @@ import {
   createBranch,
   updateBranch,
   deleteBranch,
+  API_BASE_URL,
 } from '../../lib/api';
 
 // API helper
 export async function changePassword(currentPassword: string, newPassword: string) {
   const authHeaders = () => ({ Authorization: `Bearer ${sessionStorage.getItem('storeadmin_token') ?? ''}` });
 
-  const res = await fetch(`/api/storeadmin/settings/reset-password`, {
+  const res = await fetch(`${API_BASE_URL}/api/storeadmin/settings/reset-password`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -36,7 +37,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
 export async function fetchStoreQr(storeId: string) {
   const authHeaders = () => ({ Authorization: `Bearer ${sessionStorage.getItem('storeadmin_token') ?? ''}` });
 
-  const res = await fetch(`/api/storeadmin/qr/${storeId}`, {
+  const res = await fetch(`${API_BASE_URL}/api/storeadmin/qr/${storeId}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',

@@ -12,6 +12,7 @@ import { FeaturedStores } from '../../components/FeaturedStores';
 import { ProductSection } from '../../components/Productssection';
 import { NearbyStoresBanner } from '../../components/NearbyStoresBanner';
 import { PromoOffersSlider } from '../../components/PromoOffersSlider';
+import { API_BASE_URL } from '../../lib/api';
 
 const STORES_CACHE_KEY = 'aabharan_stores_cache';
 const PRODUCTS_CACHE_KEY = 'aabharan_products_cache';
@@ -55,7 +56,7 @@ export function HomePage() {
       }
 
       try {
-        const response = await fetch('/api/admin/store/all');
+        const response = await fetch(`${API_BASE_URL}/api/admin/store/all`);
         const json = await response.json();
 
         if (json.success && Array.isArray(json.storeAdmins)) {
@@ -121,7 +122,7 @@ export function HomePage() {
       }
 
       try {
-        const response = await fetch('https://aabharan-4g0nax65d-aabharan1.vercel.app/api/customer/products/all');
+        const response = await fetch(`${API_BASE_URL}/api/customer/products/all`);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
         const json = await response.json();

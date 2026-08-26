@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Search
 } from 'lucide-react';
+import { API_BASE_URL } from '../../lib/api';
 
 interface MetalType {
   id: string;
@@ -101,7 +102,7 @@ export default function MetalTypesPage() {
 
     try {
       const token = getAuthToken();
-      const res = await fetch('/api/storeadmin/metal-types', {
+      const res = await fetch(`${API_BASE_URL}/api/storeadmin/metal-types`, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -172,8 +173,8 @@ export default function MetalTypesPage() {
     const token = getAuthToken();
     const isEdit = !!editingMetalType;
     const url = isEdit 
-      ? `/api/storeadmin/metal-types/${editingMetalType.id}` 
-      : '/api/storeadmin/metal-types';
+      ? `${API_BASE_URL}/api/storeadmin/metal-types/${editingMetalType.id}` 
+      : `${API_BASE_URL}/api/storeadmin/metal-types`;
     const method = isEdit ? 'PUT' : 'POST';
 
     try {
@@ -220,7 +221,7 @@ export default function MetalTypesPage() {
 
     const token = getAuthToken();
     try {
-      const res = await fetch(`/api/storeadmin/metal-types/${metalTypeToDelete.id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/storeadmin/metal-types/${metalTypeToDelete.id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
