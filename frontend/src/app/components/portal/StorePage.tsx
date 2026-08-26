@@ -36,7 +36,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
 export async function fetchStoreQr(storeId: string) {
   const authHeaders = () => ({ Authorization: `Bearer ${sessionStorage.getItem('storeadmin_token') ?? ''}` });
 
-  const res = await fetch(`http://10.227.35.232:3000/api/storeadmin/qr/${storeId}`, {
+  const res = await fetch(`/api/storeadmin/qr/${storeId}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
