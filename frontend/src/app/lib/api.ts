@@ -70,7 +70,7 @@ export async function updateStoreSettings(payload: {
 // Add/replace this function in lib/api.ts
 
 export async function updateStoreAssets(formData: FormData) {
-  const res = await fetch(`/api/storeadmin/settings/assets`, {
+  const res = await fetch(`https://aabharan.vercel.app/api/storeadmin/settings/assets`, {
     method: 'POST',
     headers: { ...authHeaders() }, // no Content-Type — browser sets multipart boundary
     body: formData,

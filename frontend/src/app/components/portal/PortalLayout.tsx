@@ -123,6 +123,8 @@ export function PortalLayout() {
     setLogoutConfirmOpen(false);
     setIsLoggingOut(false);
     clearAuthSession();
+    localStorage.clear();
+    sessionStorage.clear();
   }
 
   // Fallback to name from database ("Suvarna" by default in Prisma schema)
