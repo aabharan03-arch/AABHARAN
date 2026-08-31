@@ -38,6 +38,7 @@ export async function GET(
       where: { publicSlug: slug },
       select: {
         id: true,
+        storeAdminId: true, // needed internally to query products (Product.storeId = StoreAdmin.id) — stripped before response
         name: true,
         about: true,
         logo: true,
@@ -66,8 +67,6 @@ export async function GET(
             mapUrl: true,
           },
         },
-        // Don't select storeAdminId or the storeAdmin relation here —
-        // this response goes straight to an anonymous customer's browser.
       },
     });
 
@@ -79,8 +78,9 @@ export async function GET(
     }
 
     // Products aren't a Prisma relation on Store — fetch by storeId separately.
+    // NOTE: Product.storeId actually stores StoreAdmin.id, not Store.id.
     const products = await prisma.product.findMany({
-      where: { storeId: store.id },
+      where: { storeId: store.storeAdminId },
       orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
       select: {
         id: true,
@@ -102,11 +102,14 @@ export async function GET(
       },
     });
 
+    // Strip storeAdminId before this reaches the anonymous customer's browser
+    const { storeAdminId, ...publicStore } = store;
+
     return NextResponse.json(
       {
         message: 'Store profile ready.',
         data: {
-          ...store,
+          ...publicStore,
           products,
         },
       },
