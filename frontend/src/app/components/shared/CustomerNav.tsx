@@ -50,7 +50,7 @@ export function CustomerNav() {
       }
 
       try {
-        const res = await fetch('/api/customer/me', {
+        const res = await fetch('https://aabharan.vercel.app/api/customer/me', {
           method: 'GET',
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -113,7 +113,7 @@ export function CustomerNav() {
       const token = localStorage.getItem('token');
 
       if (token) {
-        await fetch('/api/customer/logout', {
+        await fetch('https://aabharan.vercel.app/api/customer/logout', {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         });
