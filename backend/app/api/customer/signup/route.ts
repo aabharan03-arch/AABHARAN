@@ -2,48 +2,56 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
-// Define your CORS headers to match the frontend
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*', // Update if your port changes
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Allow-Credentials': 'true', 
-};
+function getCorsHeaders(origin: string | null) {
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'https://aabharan03.vercel.app/', // add your prod frontend domain(s)
+  ];
 
-// Handle the preflight OPTIONS request
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+  const isAllowed = origin && allowedOrigins.includes(origin);
+
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin! : '',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Credentials': 'true',
+    'Vary': 'Origin',
+  };
+}
+
+export async function OPTIONS(request: Request) {
+  const origin = request.headers.get('origin');
+  return NextResponse.json({}, { headers: getCorsHeaders(origin) });
 }
 
 export async function POST(request: Request) {
+  const origin = request.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
+
   try {
     const { email, password, name } = await request.json();
 
-    // Check if user exists
     const existingUser = await prisma.customer.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json(
-        { error: 'User already exists' }, 
+        { error: 'User already exists' },
         { status: 400, headers: corsHeaders }
       );
     }
 
-    // Hash password and create user
     const hashedPassword = await bcrypt.hash(password, 10);
     await prisma.customer.create({
       data: { email, password: hashedPassword, name },
     });
 
     return NextResponse.json(
-      { message: 'User created successfully' }, 
+      { message: 'User created successfully' },
       { status: 201, headers: corsHeaders }
     );
   } catch (error) {
-    // Reveal the true error in your terminal
     console.error("SIGNUP ROUTE ERROR:", error);
-    
     return NextResponse.json(
-      { error: 'Internal Server Error' }, 
+      { error: 'Internal Server Error' },
       { status: 500, headers: corsHeaders }
     );
   }
