@@ -200,6 +200,7 @@ model Enquiry {
 
 enum EnquiryStatus {
   NEW
+  IN_PROGRESS
   CONTACTED
   CLOSED
 }

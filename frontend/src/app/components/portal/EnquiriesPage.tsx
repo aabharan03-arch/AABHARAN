@@ -1,9 +1,70 @@
-import { useState } from 'react';
-import { Search, Mail, Calendar, X } from 'lucide-react';
-import { ENQUIRIES } from '../data/mockData';
-import type { Enquiry } from '../data/mockData';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, Mail, Calendar, X, Loader2, AlertCircle } from 'lucide-react';
+import { API_BASE_URL } from '../../lib/api';
 
-const STATUS_OPTIONS = ['New', 'In Progress', 'Contacted', 'Closed'] as const;
+const STATUS_OPTIONS = ['New', 'Contacted', 'Closed'] as const;
+type DisplayStatus = (typeof STATUS_OPTIONS)[number];
+
+// Backend enum <-> display label mapping
+const STATUS_TO_API: Record<DisplayStatus, string> = {
+  New: 'NEW',
+  Contacted: 'CONTACTED',
+  Closed: 'CLOSED',
+};
+const STATUS_FROM_API: Record<string, DisplayStatus> = {
+  NEW: 'New',
+  CONTACTED: 'Contacted',
+  CLOSED: 'Closed',
+};
+
+interface Enquiry {
+  id: string;
+  customerName: string;
+  email: string;
+  phone: string;
+  productName: string;
+  message: string;
+  date: string;
+  status: DisplayStatus;
+}
+
+// Raw shape returned by GET /api/storeadmin/enquiries
+interface ApiEnquiry {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  message: string;
+  status: string;
+  createdAt: string;
+  product: { id: string; name: string; images: string[]; category: string } | null;
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function mapApiEnquiry(e: ApiEnquiry): Enquiry {
+  return {
+    id: e.id,
+    customerName: e.fullName,
+    email: e.email,
+    phone: e.phone || 'Not provided',
+    productName: e.product?.name || 'Unknown product',
+    message: e.message,
+    date: formatDate(e.createdAt),
+    status: STATUS_FROM_API[e.status] || 'New',
+  };
+}
+
+function authHeaders(): Record<string, string> {
+  const token = typeof window !== 'undefined' ? sessionStorage.getItem('storeadmin_token') : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 // ---------------------------------------------------------------------------
 // Design tokens — shared with DashboardPage / PortalLayout
@@ -18,11 +79,40 @@ const T = {
 };
 
 export function EnquiriesPage() {
-  const [enquiries, setEnquiries] = useState<Enquiry[]>(ENQUIRIES);
+  const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [selectedEnquiry, setSelectedEnquiry] = useState<Enquiry | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false);
+
+  const loadEnquiries = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/storeadmin/enquiries`, {
+        headers: { ...authHeaders() },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to load enquiries.');
+      }
+      const mapped: Enquiry[] = (data.enquiries ?? []).map(mapApiEnquiry);
+      setEnquiries(mapped);
+    } catch (err: any) {
+      console.error('Failed to fetch enquiries:', err);
+      setError(err.message || 'Something went wrong while loading enquiries.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadEnquiries();
+  }, [loadEnquiries]);
 
   const filtered = enquiries.filter(e => {
     const matchesQuery = !query || e.customerName.toLowerCase().includes(query.toLowerCase()) || e.productName.toLowerCase().includes(query.toLowerCase());
@@ -30,17 +120,41 @@ export function EnquiriesPage() {
     return matchesQuery && matchesStatus;
   });
 
-  function updateStatus(id: string, status: Enquiry['status']) {
+  async function updateStatus(id: string, status: DisplayStatus) {
+    const previous = enquiries;
+    setStatusUpdating(true);
+
+    // optimistic update
     setEnquiries(es => es.map(e => e.id === id ? { ...e, status } : e));
     if (selectedEnquiry?.id === id) setSelectedEnquiry(e => e ? { ...e, status } : e);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/storeadmin/enquiries`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ enquiryId: id, status: STATUS_TO_API[status] }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update status.');
+      }
+    } catch (err: any) {
+      console.error('Failed to update enquiry status:', err);
+      // revert on failure
+      setEnquiries(previous);
+      if (selectedEnquiry?.id === id) {
+        const reverted = previous.find(e => e.id === id);
+        if (reverted) setSelectedEnquiry(reverted);
+      }
+    } finally {
+      setStatusUpdating(false);
+    }
   }
 
   const statusColors = (s: Enquiry['status']) =>
     s === 'New'
       ? { bg: T.goldSoft, fg: T.navy }
-      : s === 'In Progress'
-        ? { bg: '#f4e3c1', fg: '#7a5a1e' }
-        : s === 'Contacted'
+      : s === 'Contacted'
           ? { bg: '#dcebe1', fg: '#2f6b47' }
           : { bg: T.ivoryShade, fg: T.muted };
 
@@ -77,13 +191,12 @@ export function EnquiriesPage() {
       <div
         style={{
           backgroundColor: '#ffffff',
-          borderRadius: '24px', // Modernized rounding
+          borderRadius: '24px',
           padding: '16px 20px',
-          border: `1px solid #e5e7eb`, // Updated to standard gray-200
+          border: `1px solid #e5e7eb`,
         }}
         className="flex flex-col md:flex-row md:items-center gap-4"
       >
-        {/* Search Bar: Increased width to 360px */}
         <div className="relative flex-shrink-0 w-full md:w-[360px]">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -94,9 +207,9 @@ export function EnquiriesPage() {
             className="w-full rounded-xl text-sm focus:outline-none transition-all border"
             style={{
               fontFamily: 'Inter, var(--font-family-sans)',
-              backgroundColor: '#f9f7ee', // Ivory
-              borderColor: '#e5e7eb',     // IvoryShade
-              color: '#04091e',           // Navy
+              backgroundColor: '#f9f7ee',
+              borderColor: '#e5e7eb',
+              color: '#04091e',
               paddingLeft: '40px',
               paddingRight: '14px',
               height: '42px',
@@ -106,10 +219,6 @@ export function EnquiriesPage() {
           />
         </div>
 
-        {/* Divider */}
-        <div style={{ width: '1px', alignSelf: 'stretch', backgroundColor: '#e5e7eb' }} className="hidden md:block" />
-
-        {/* Filter Options: Flex layout to fit text naturally */}
         <div className="flex flex-wrap items-center gap-2 flex-1">
           {['All', ...STATUS_OPTIONS].map(s => {
             const active = statusFilter === s;
@@ -119,7 +228,6 @@ export function EnquiriesPage() {
                 onClick={() => setStatusFilter(s)}
                 className="rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer border"
                 style={{
-                  // 2px internal padding added to the requested 8px/16px padding
                   padding: '10px 18px',
                   backgroundColor: active ? '#04091e' : '#f9f7ee',
                   color: active ? '#ffffff' : '#6b7280',
@@ -136,143 +244,181 @@ export function EnquiriesPage() {
           })}
         </div>
       </div>
-      {/* Table */}
-      <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: `1px solid ${T.ivoryShade}`, overflow: 'hidden' }}>
-        {/* Desktop Table */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr style={{ backgroundColor: T.ivory, borderBottom: `1px solid ${T.ivoryShade}` }}>
-                {['Customer', 'Product', 'Date', 'Status', 'Actions'].map(h => (
-                  <th
-                    key={h}
-                    className="text-left px-xl py-lg"
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                      color: T.muted,
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(enq => {
-                const colors = statusColors(enq.status);
-                return (
-                  <tr
-                    key={enq.id}
-                    style={{ borderBottom: `1px solid ${T.ivoryShade}` }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = T.ivory)}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                    className="transition-colors"
-                  >
-                    <td className="px-xl py-lg">
-                      <p style={{ fontSize: '13.5px', fontWeight: 500, color: T.navy }}>{enq.customerName}</p>
-                      <div className="flex items-center gap-sm mt-xs">
-                        <Mail size={11} color={T.muted} />
-                        <span style={{ fontSize: '12px', color: T.muted }}>{enq.email}</span>
-                      </div>
-                    </td>
-                    <td className="px-xl py-lg">
-                      <p style={{ fontSize: '13.5px', color: T.navy }}>{enq.productName}</p>
-                      <p style={{ fontSize: '12px', color: T.muted, marginTop: '2px' }} className="line-clamp-1">
-                        {enq.message}
-                      </p>
-                    </td>
-                    <td className="px-xl py-lg">
-                      <div className="flex items-center gap-xs">
-                        <Calendar size={12} color={T.muted} />
-                        <span style={{ fontSize: '13px', color: T.muted }}>{enq.date}</span>
-                      </div>
-                    </td>
-                    <td className="px-xl py-lg">
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          padding: '4px 10px',
-                          borderRadius: '999px',
-                          backgroundColor: colors.bg,
-                          color: colors.fg,
-                        }}
-                      >
-                        {enq.status}
-                      </span>
-                    </td>
-                    <td className="px-xl py-lg">
-                      <button
-                        onClick={() => setSelectedEnquiry(enq)}
-                        style={{
-                          fontSize: '12.5px',
-                          fontWeight: 500,
-                          color: T.navy,
-                          border: `1px solid ${T.ivoryShade}`,
-                          borderRadius: '8px',
-                          padding: '6px 14px',
-                          backgroundColor: '#fff',
-                          cursor: 'pointer',
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.borderColor = T.gold)}
-                        onMouseLeave={e => (e.currentTarget.style.borderColor = T.ivoryShade)}
-                      >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
 
-        {/* Mobile cards */}
-        <div className="md:hidden flex flex-col">
-          {filtered.map(enq => {
-            const colors = statusColors(enq.status);
-            return (
-              <div
-                key={enq.id}
-                className="p-xl flex flex-col gap-md"
-                style={{ borderBottom: `1px solid ${T.ivoryShade}` }}
-                onClick={() => setSelectedEnquiry(enq)}
-              >
-                <div className="flex items-start justify-between gap-md">
-                  <div>
-                    <p style={{ fontSize: '13.5px', fontWeight: 500, color: T.navy }}>{enq.customerName}</p>
-                    <p style={{ fontSize: '12px', color: T.muted, marginTop: '2px' }}>{enq.productName}</p>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      padding: '4px 10px',
-                      borderRadius: '999px',
-                      backgroundColor: colors.bg,
-                      color: colors.fg,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {enq.status}
-                  </span>
-                </div>
-                <p style={{ fontSize: '13px', color: T.muted }} className="line-clamp-2">{enq.message}</p>
-                <p style={{ fontSize: '12px', color: T.muted }}>{enq.date}</p>
-              </div>
-            );
-          })}
+      {/* Loading state */}
+      {isLoading && (
+        <div
+          className="flex items-center justify-center gap-2 py-16"
+          style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: `1px solid ${T.ivoryShade}` }}
+        >
+          <Loader2 size={18} className="animate-spin" style={{ color: T.muted }} />
+          <span style={{ fontSize: '13.5px', color: T.muted }}>Loading enquiries...</span>
         </div>
+      )}
 
-        {filtered.length === 0 && (
-          <div className="p-2xl text-center">
-            <p style={{ fontSize: '13.5px', color: T.muted }}>No enquiries found.</p>
+      {/* Error state */}
+      {!isLoading && error && (
+        <div
+          className="flex items-start gap-3 p-4"
+          style={{
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '16px',
+            color: '#b91c1c',
+          }}
+        >
+          <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+          <div>
+            <p style={{ fontSize: '13.5px', fontWeight: 600 }}>{error}</p>
+            <button
+              onClick={loadEnquiries}
+              style={{ fontSize: '12.5px', fontWeight: 600, textDecoration: 'underline', marginTop: '4px', cursor: 'pointer' }}
+            >
+              Try again
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Table */}
+      {!isLoading && !error && (
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: `1px solid ${T.ivoryShade}`, overflow: 'hidden' }}>
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr style={{ backgroundColor: T.ivory, borderBottom: `1px solid ${T.ivoryShade}` }}>
+                  {['Customer', 'Product', 'Date', 'Status', 'Actions'].map(h => (
+                    <th
+                      key={h}
+                      className="text-left px-xl py-lg"
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        color: T.muted,
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(enq => {
+                  const colors = statusColors(enq.status);
+                  return (
+                    <tr
+                      key={enq.id}
+                      style={{ borderBottom: `1px solid ${T.ivoryShade}` }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = T.ivory)}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                      className="transition-colors"
+                    >
+                      <td className="px-xl py-lg">
+                        <p style={{ fontSize: '13.5px', fontWeight: 500, color: T.navy }}>{enq.customerName}</p>
+                        <div className="flex items-center gap-sm mt-xs">
+                          <Mail size={11} color={T.muted} />
+                          <span style={{ fontSize: '12px', color: T.muted }}>{enq.email}</span>
+                        </div>
+                      </td>
+                      <td className="px-xl py-lg">
+                        <p style={{ fontSize: '13.5px', color: T.navy }}>{enq.productName}</p>
+                        <p style={{ fontSize: '12px', color: T.muted, marginTop: '2px' }} className="line-clamp-1">
+                          {enq.message}
+                        </p>
+                      </td>
+                      <td className="px-xl py-lg">
+                        <div className="flex items-center gap-xs">
+                          <Calendar size={12} color={T.muted} />
+                          <span style={{ fontSize: '13px', color: T.muted }}>{enq.date}</span>
+                        </div>
+                      </td>
+                      <td className="px-xl py-lg">
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            padding: '4px 10px',
+                            borderRadius: '999px',
+                            backgroundColor: colors.bg,
+                            color: colors.fg,
+                          }}
+                        >
+                          {enq.status}
+                        </span>
+                      </td>
+                      <td className="px-xl py-lg">
+                        <button
+                          onClick={() => setSelectedEnquiry(enq)}
+                          style={{
+                            fontSize: '12.5px',
+                            fontWeight: 500,
+                            color: T.navy,
+                            border: `1px solid ${T.ivoryShade}`,
+                            borderRadius: '8px',
+                            padding: '6px 14px',
+                            backgroundColor: '#fff',
+                            cursor: 'pointer',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.borderColor = T.gold)}
+                          onMouseLeave={e => (e.currentTarget.style.borderColor = T.ivoryShade)}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden flex flex-col">
+            {filtered.map(enq => {
+              const colors = statusColors(enq.status);
+              return (
+                <div
+                  key={enq.id}
+                  className="p-xl flex flex-col gap-md"
+                  style={{ borderBottom: `1px solid ${T.ivoryShade}` }}
+                  onClick={() => setSelectedEnquiry(enq)}
+                >
+                  <div className="flex items-start justify-between gap-md">
+                    <div>
+                      <p style={{ fontSize: '13.5px', fontWeight: 500, color: T.navy }}>{enq.customerName}</p>
+                      <p style={{ fontSize: '12px', color: T.muted, marginTop: '2px' }}>{enq.productName}</p>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        padding: '4px 10px',
+                        borderRadius: '999px',
+                        backgroundColor: colors.bg,
+                        color: colors.fg,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {enq.status}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '13px', color: T.muted }} className="line-clamp-2">{enq.message}</p>
+                  <p style={{ fontSize: '12px', color: T.muted }}>{enq.date}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {filtered.length === 0 && (
+            <div className="p-2xl text-center">
+              <p style={{ fontSize: '13.5px', color: T.muted }}>No enquiries found.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Enquiry Detail Modal — fully custom, matches ivory/navy system */}
       {selectedEnquiry && (
@@ -390,6 +536,7 @@ export function EnquiriesPage() {
               <div className="relative">
                 <button
                   onClick={() => setStatusMenuOpen(o => !o)}
+                  disabled={statusUpdating}
                   style={{
                     fontSize: '13px',
                     fontWeight: 500,
@@ -398,7 +545,8 @@ export function EnquiriesPage() {
                     border: `1px solid ${T.navy}`,
                     borderRadius: '10px',
                     padding: '10px 18px',
-                    cursor: 'pointer',
+                    cursor: statusUpdating ? 'not-allowed' : 'pointer',
+                    opacity: statusUpdating ? 0.7 : 1,
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
@@ -406,8 +554,14 @@ export function EnquiriesPage() {
                     justifyContent: 'space-between',
                   }}
                 >
-                  {selectedEnquiry.status}
-                  <span style={{ fontSize: '10px' }}>{statusMenuOpen ? '▲' : '▼'}</span>
+                  {statusUpdating ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <>
+                      {selectedEnquiry.status}
+                      <span style={{ fontSize: '10px' }}>{statusMenuOpen ? '▲' : '▼'}</span>
+                    </>
+                  )}
                 </button>
                 {statusMenuOpen && (
                   <div

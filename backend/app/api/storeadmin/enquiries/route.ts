@@ -84,7 +84,7 @@ export async function PATCH(req: Request) {
         { status: 400, headers: corsHeaders }
       );
     }
-    if (!['NEW', 'CONTACTED', 'CLOSED'].includes(status)) {
+    if (!['NEW', 'IN_PROGRESS', 'CONTACTED', 'CLOSED'].includes(status)) {
       return NextResponse.json(
         { error: 'Invalid status value.' },
         { status: 400, headers: corsHeaders }

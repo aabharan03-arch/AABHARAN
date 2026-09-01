@@ -122,7 +122,7 @@ export function HomePage() {
       }
 
       try {
-        const response = await fetch(`http://localhost:3000/api/customer/products/all`);
+        const response = await fetch(`${API_BASE_URL}/api/customer/products/all`);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
         const json = await response.json();
