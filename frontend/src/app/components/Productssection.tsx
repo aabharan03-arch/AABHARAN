@@ -31,6 +31,43 @@ interface ProductSectionProps {
 const CATEGORIES_LIST = ['All', 'Rings', 'Necklaces', 'Earrings', 'Bracelets', 'Bangles'];
 const METALS_LIST = ['All Metals', 'Gold', 'Silver', 'Diamond'];
 
+// ---- Wishlist API helpers ----
+// Assumes a customer JWT is stored under 'customerToken' after login.
+// Adjust the storage key/mechanism to match however your auth flow stores it.
+function authHeaders(): Record<string, string> {
+  const token =
+    typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}  
+
+async function fetchWishlistIds(): Promise<string[]> {
+  try {
+    const res = await fetch('http://localhost:3000/api/customer/wishlist', {
+      headers: { ...authHeaders() },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.productIds ?? []) as string[];
+  } catch {
+    return [];
+  }
+}
+
+async function toggleWishlist(productId: string | number): Promise<boolean> {
+  const res = await fetch('http://localhost:3000/api/customer/wishlist/toggle', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ productId: String(productId) }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Failed to update wishlist (${res.status})`);
+  }
+  const data = await res.json();
+  return data.liked as boolean;
+}
+// --------------------------------
+
 export function ProductSection({
   products = [],
   isLoading = false,
@@ -47,8 +84,20 @@ export function ProductSection({
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [isMetalOpen, setIsMetalOpen] = useState(false);
 
+  // Wishlist state — lifted here so it's fetched once, not per-card,
+  // and so the Like Products page (elsewhere) stays in sync on next fetch.
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [wishlistLoaded, setWishlistLoaded] = useState(false);
+
   const categoryRef = useRef<HTMLDivElement>(null);
   const metalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetchWishlistIds().then((ids) => {
+      setLikedIds(new Set(ids));
+      setWishlistLoaded(true);
+    });
+  }, []);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -78,6 +127,32 @@ export function ProductSection({
       onCategoryChange(category);
     }
     setIsCategoryOpen(false);
+  };
+
+  // Toggle a single product's liked state — optimistic, reverts on API failure.
+  const handleToggleLike = async (productId: string | number) => {
+    const id = String(productId);
+    const wasLiked = likedIds.has(id);
+
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (wasLiked) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+    try {
+      await toggleWishlist(id);
+    } catch (err) {
+      console.error('Wishlist toggle failed:', err);
+      // revert optimistic update
+      setLikedIds((prev) => {
+        const next = new Set(prev);
+        if (wasLiked) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    }
   };
 
   // Combined Category + Metal Filter Logic
@@ -114,7 +189,7 @@ export function ProductSection({
 
           {/* Filter Dropdowns Container */}
           <div className="flex items-center gap-3">
-            
+
             {/* Category Dropdown */}
             <div className="relative" ref={categoryRef}>
               <button
@@ -235,6 +310,8 @@ export function ProductSection({
                 <ProductCard
                   key={product.id}
                   product={product}
+                  isLiked={likedIds.has(String(product.id))}
+                  onToggleLike={() => handleToggleLike(product.id)}
                   onEnquire={() => onEnquire && onEnquire(product)}
                 />
               ))}
@@ -265,12 +342,15 @@ export function ProductSection({
 
 function ProductCard({
   product,
+  isLiked,
+  onToggleLike,
   onEnquire,
 }: {
   product: Product;
+  isLiked: boolean;
+  onToggleLike: () => void;
   onEnquire: () => void;
 }) {
-  const [isLiked, setIsLiked] = useState(false);
   const productUrl = `/products/${product.id}`;
 
   return (
@@ -314,11 +394,11 @@ function ProductCard({
         {/* Floating Wishlist Button */}
         <button
           type="button"
-          aria-label="Save to wishlist"
+          aria-label={isLiked ? 'Remove from wishlist' : 'Save to wishlist'}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            setIsLiked(!isLiked);
+            onToggleLike();
           }}
           className="absolute top-3 right-3 p-2.5 bg-white/80 backdrop-blur-md rounded-full text-gray-700 hover:text-rose-500 hover:bg-white shadow-md transition-all duration-300 z-10 cursor-pointer"
         >

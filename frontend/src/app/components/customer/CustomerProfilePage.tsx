@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   Loader2,
 } from 'lucide-react';
-import { PRODUCTS } from '../data/mockData';
 import { API_BASE_URL } from '../../lib/api';
 
 type Tab = 'profile' | 'Liked-products';
@@ -23,6 +22,15 @@ interface AuthUser {
   email: string;
   name?: string;
   username?: string;
+}
+
+// Shape returned by GET /api/customer/wishlist -> products[]
+interface LikedProduct {
+  id: string;
+  name: string;
+  storeName?: string;
+  images: string[];
+  price?: number;
 }
 
 export function CustomerProfilePage() {
@@ -459,6 +467,84 @@ function ProfileTab({ user, setUser }: ProfileTabProps) {
 }
 
 function SavedProductsTab() {
+  const [products, setProducts] = useState<LikedProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  // Track which product ids are mid-removal so we can disable just that card,
+  // not the whole list, and show a per-card spinner instead of a full reload.
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const fetchLikedProducts = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Please log in to view your liked products.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/customer/wishlist`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'Failed to load liked products.');
+        }
+
+        const data = await res.json();
+        setProducts(data.products ?? []);
+      } catch (err: any) {
+        console.error('Failed to fetch liked products:', err);
+        setError(err.message || 'Something went wrong while loading liked products.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLikedProducts();
+  }, []);
+
+  const handleRemove = async (productId: string) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    // Optimistic removal from the grid; revert if the API call fails.
+    setRemovingIds(prev => new Set(prev).add(productId));
+    const previousProducts = products;
+    setProducts(prev => prev.filter(p => p.id !== productId));
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/customer/wishlist/toggle`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ productId }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to remove product.');
+      }
+      // Toggle endpoint returns { liked: false } here since the item existed —
+      // no further action needed, the optimistic removal already reflects it.
+    } catch (err: any) {
+      console.error('Failed to remove liked product:', err);
+      // Revert — put the product back since the removal didn't actually happen.
+      setProducts(previousProducts);
+    } finally {
+      setRemovingIds(prev => {
+        const next = new Set(prev);
+        next.delete(productId);
+        return next;
+      });
+    }
+  };
+
   return (
     <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div>
@@ -466,31 +552,74 @@ function SavedProductsTab() {
         <p className="text-gray-500 text-sm mt-2">Your curated collection of favorite jewellery pieces.</p>
       </div>
 
-      {PRODUCTS.length > 0 ? (
+      {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {PRODUCTS.slice(0, 6).map(product => (
-            <div key={product.id} className="group cursor-pointer">
-              <div className="rounded-[24px] overflow-hidden border border-gray-200 bg-white hover:shadow-xl hover:border-gray-300 transition-all flex flex-col h-full">
-                <div className="relative aspect-square overflow-hidden bg-[#f9f7ee]">
-                  <img
-                    src={product.images[0]}
-                    alt={product.name}
-                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur rounded-full p-2 shadow-md">
-                    <Heart size={20} className="text-red-500 fill-red-500" />
-                  </div>
-                </div>
-                <div className="p-5 flex flex-col flex-1">
-                  <p className="text-gray-400 text-[10px] font-bold mb-2 uppercase tracking-widest">{product.storeName}</p>
-                  <p className="text-base font-extrabold text-[#04091e] leading-snug line-clamp-2">{product.name}</p>
-                  <p className="text-sm font-bold text-[#04091e] mt-auto pt-3">
-                    ₹{product.price.toLocaleString('en-IN')}
-                  </p>
-                </div>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-[24px] overflow-hidden border border-gray-200 bg-white animate-pulse">
+              <div className="aspect-square bg-gray-200/70" />
+              <div className="p-5 flex flex-col gap-2">
+                <div className="h-2.5 bg-gray-200/70 rounded w-1/3" />
+                <div className="h-4 bg-gray-200/70 rounded w-3/4" />
+                <div className="h-4 bg-gray-200/70 rounded w-1/4 mt-2" />
               </div>
             </div>
           ))}
+        </div>
+      ) : error ? (
+        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 text-red-700 text-sm font-semibold rounded-xl">
+          <AlertCircle size={18} className="flex-shrink-0 text-red-500 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      ) : products.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {products.map(product => {
+            const isRemoving = removingIds.has(product.id);
+            return (
+              <div key={product.id} className="group">
+                <div className="rounded-[24px] overflow-hidden border border-gray-200 bg-white hover:shadow-xl hover:border-gray-300 transition-all flex flex-col h-full">
+                  <div className="relative aspect-square overflow-hidden bg-[#f9f7ee]">
+                    <a href={`/products/${product.id}`} className="block w-full h-full">
+                      <img
+                        src={product.images?.[0] || 'https://via.placeholder.com/400x400?text=Jewellery'}
+                        alt={product.name}
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            'https://via.placeholder.com/400x400?text=Jewellery';
+                        }}
+                      />
+                    </a>
+                    <button
+                      type="button"
+                      aria-label="Remove from liked products"
+                      disabled={isRemoving}
+                      onClick={() => handleRemove(product.id)}
+                      className="absolute top-4 right-4 bg-white/90 backdrop-blur rounded-full p-2 shadow-md hover:bg-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isRemoving ? (
+                        <Loader2 size={20} className="text-gray-400 animate-spin" />
+                      ) : (
+                        <Heart size={20} className="text-red-500 fill-red-500" />
+                      )}
+                    </button>
+                  </div>
+                  <div className="p-5 flex flex-col flex-1">
+                    <p className="text-gray-400 text-[10px] font-bold mb-2 uppercase tracking-widest">
+                      {product.storeName || 'Jewellery Partner'}
+                    </p>
+                    <p className="text-base font-extrabold text-[#04091e] leading-snug line-clamp-2">
+                      {product.name}
+                    </p>
+                    {typeof product.price === 'number' && (
+                      <p className="text-sm font-bold text-[#04091e] mt-auto pt-3">
+                        ₹{product.price.toLocaleString('en-IN')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-16">
