@@ -212,130 +212,52 @@ export function ProductsPage() {
         </button>
       </div>
 
-      {/* Filters */}
+      {/* Search Filter */}
       <div
-        style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '18px 20px', border: `1px solid ${T.ivoryShade}` }}
-        className="flex flex-col gap-lg"
+        style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '16px 20px', border: `1px solid ${T.ivoryShade}` }}
+        className="flex flex-col md:flex-row md:items-center gap-lg"
       >
-        <div className="flex flex-col md:flex-row md:items-center gap-lg">
-          <div className="relative flex-shrink-0 w-full md:w-[240px]">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2" color={T.muted} />
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              className="w-full rounded-corner-md focus:outline-none"
-              style={{
-                fontFamily: 'Inter, var(--font-family-sans)',
-                backgroundColor: T.ivory,
-                border: `1px solid ${T.ivoryShade}`,
-                color: T.navy,
-                paddingLeft: '34px',
-                paddingRight: '14px',
-                height: '38px',
-                fontSize: '13px',
-              }}
-              onFocus={e => (e.currentTarget.style.borderColor = T.gold)}
-              onBlur={e => (e.currentTarget.style.borderColor = T.ivoryShade)}
-            />
-          </div>
-
-          <div style={{ width: '1px', alignSelf: 'stretch', backgroundColor: T.ivoryShade }} className="hidden md:block" />
-
-          {/* Category filter */}
-          <div className="flex flex-col gap-xs flex-1 min-w-0">
-            <span style={{ fontSize: '10.5px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted }}>
-              Category
-            </span>
-            <div className="flex gap-xs flex-wrap">
-              {(() => {
-                const apiCatNames = apiCategories.map(c => c.name);
-                const defaultCats = CATEGORIES.filter(c => c !== 'All');
-                const combined = Array.from(new Set([...defaultCats, ...apiCatNames]));
-                return ['All', ...combined].map(cat => {
-                const active = categoryFilter === cat;
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => setCategoryFilter(cat)}
-                    className="whitespace-nowrap transition-all"
-                    style={{
-                      fontFamily: 'Inter, var(--font-family-sans)',
-                      backgroundColor: active ? T.navy : T.ivory,
-                      color: active ? T.gold : T.muted,
-                      border: `1px solid ${active ? T.navy : T.ivoryShade}`,
-                      borderRadius: '999px',
-                      padding: '6px 13px',
-                      fontSize: '12px',
-                      fontWeight: 500,
-                    }}
-                  >
-                    {cat}
-                  </button>
-                );
-              })})}
-            </div>
-          </div>
+        <div className="relative flex-shrink-0 w-full md:w-[300px]">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2" color={T.muted} />
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            className="w-full rounded-corner-md focus:outline-none"
+            style={{
+              fontFamily: 'Inter, var(--font-family-sans)',
+              backgroundColor: T.ivory,
+              border: `1px solid ${T.ivoryShade}`,
+              color: T.navy,
+              paddingLeft: '34px',
+              paddingRight: '14px',
+              height: '38px',
+              fontSize: '13px',
+            }}
+            onFocus={e => (e.currentTarget.style.borderColor = T.gold)}
+            onBlur={e => (e.currentTarget.style.borderColor = T.ivoryShade)}
+          />
         </div>
 
-        <div style={{ height: '1px', backgroundColor: T.ivoryShade }} />
-
-        <div className="flex flex-col md:flex-row md:items-center gap-lg">
-          {/* Metal type filter */}
-          <div className="flex flex-col gap-xs flex-1 min-w-0">
-            <span style={{ fontSize: '10.5px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted }}>
-              Metal Type
-            </span>
-            <div className="flex gap-xs flex-wrap">
-              {(() => {
-                const apiMetalNames = apiMetalTypes.map(m => m.name);
-                const defaultMetals = METAL_TYPES.filter(m => m !== 'All');
-                const combined = Array.from(new Set([...defaultMetals, ...apiMetalNames]));
-                return ['All', ...combined].map(metal => {
-                const active = metalFilter === metal;
-                return (
-                  <button
-                    key={metal}
-                    onClick={() => setMetalFilter(metal)}
-                    className="whitespace-nowrap transition-all"
-                    style={{
-                      fontFamily: 'Inter, var(--font-family-sans)',
-                      backgroundColor: active ? T.navy : T.ivory,
-                      color: active ? T.gold : T.muted,
-                      border: `1px solid ${active ? T.navy : T.ivoryShade}`,
-                      borderRadius: '999px',
-                      padding: '6px 13px',
-                      fontSize: '12px',
-                      fontWeight: 500,
-                    }}
-                  >
-                    {metal}
-                  </button>
-                );
-              })})}
-            </div>
-          </div>
-
-          {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              className="flex-shrink-0 flex items-center gap-xs"
-              style={{
-                fontSize: '12px',
-                fontWeight: 600,
-                color: T.danger,
-                backgroundColor: T.dangerSoft,
-                border: 'none',
-                borderRadius: '8px',
-                padding: '8px 14px',
-                cursor: 'pointer',
-              }}
-            >
-              <X size={13} /> Clear filters
-            </button>
-          )}
-        </div>
+        {hasActiveFilters && (
+          <button
+            onClick={clearFilters}
+            className="flex-shrink-0 flex items-center gap-xs"
+            style={{
+              fontSize: '12px',
+              fontWeight: 600,
+              color: T.danger,
+              backgroundColor: T.dangerSoft,
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 14px',
+              cursor: 'pointer',
+            }}
+          >
+            <X size={13} /> Clear filters
+          </button>
+        )}
       </div>
 
       {/* Skeleton Loading state */}
@@ -366,54 +288,132 @@ export function ProductsPage() {
         </div>
       )}
 
-      {/* Product Grid */}
+      {/* Product Grid with Right Sidebar Dropdowns */}
       {!loading && !loadError && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-xl">
-          <AnimatePresence>
-            {filtered.map(product => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onToggleFeatured={handleToggleFeatured}
-                onEdit={p => { setPrefill(null); setEditProduct(p); }}
-                onDuplicate={handleDuplicate}
-                onDelete={p => setDeleteProduct(p)}
-              />
-            ))}
-          </AnimatePresence>
-
-          {filtered.length === 0 && (
-            <div
-              className="col-span-1 md:col-span-2 lg:col-span-3 text-center"
-              style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '48px 24px', border: `1px solid ${T.ivoryShade}` }}
-            >
-              <p style={{ fontSize: '13.5px', color: T.muted, marginBottom: '18px' }}>
-                {hasActiveFilters ? 'No products match your filters.' : 'No products yet.'}
-              </p>
-              {hasActiveFilters ? (
-                <button
-                  onClick={clearFilters}
-                  style={{
-                    fontSize: '13px', fontWeight: 600, color: T.navy, backgroundColor: T.ivory,
-                    border: `1px solid ${T.ivoryShade}`, borderRadius: '10px', padding: '10px 20px', cursor: 'pointer',
-                  }}
-                >
-                  Clear filters
-                </button>
-              ) : (
-                <button
-                  onClick={() => { setPrefill(null); setAddModalOpen(true); }}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '8px',
-                    fontSize: '13px', fontWeight: 600, color: T.gold, backgroundColor: T.navy,
-                    border: 'none', borderRadius: '10px', padding: '11px 20px', cursor: 'pointer',
-                  }}
-                >
-                  <Plus size={16} /> Add Your First Product
-                </button>
-              )}
+        <div className="flex flex-col gap-lg">
+          {/* Filters in single line */}
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              border: `1px solid ${T.ivoryShade}`,
+              padding: '16px 20px',
+            }}
+            className="flex flex-col md:flex-row md:items-center gap-lg"
+          >
+            {/* Category Dropdown */}
+            <div className="flex-1 min-w-0">
+              <label style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted, marginBottom: '6px', display: 'block' }}>
+                Category
+              </label>
+              <select
+                value={categoryFilter}
+                onChange={e => setCategoryFilter(e.target.value)}
+                style={{
+                  fontFamily: 'Inter, var(--font-family-sans)',
+                  backgroundColor: T.ivory,
+                  border: `1px solid ${T.ivoryShade}`,
+                  color: T.navy,
+                  borderRadius: '10px',
+                  padding: '10px 12px',
+                  fontSize: '13px',
+                  width: '100%',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {(() => {
+                  const apiCatNames = apiCategories.map(c => c.name);
+                  const defaultCats = CATEGORIES.filter(c => c !== 'All');
+                  const combined = Array.from(new Set([...defaultCats, ...apiCatNames]));
+                  return ['All', ...combined].map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ));
+                })()}
+              </select>
             </div>
-          )}
+
+            {/* Metal Type Dropdown */}
+            <div className="flex-1 min-w-0">
+              <label style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted, marginBottom: '6px', display: 'block' }}>
+                Metal Type
+              </label>
+              <select
+                value={metalFilter}
+                onChange={e => setMetalFilter(e.target.value)}
+                style={{
+                  fontFamily: 'Inter, var(--font-family-sans)',
+                  backgroundColor: T.ivory,
+                  border: `1px solid ${T.ivoryShade}`,
+                  color: T.navy,
+                  borderRadius: '10px',
+                  padding: '10px 12px',
+                  fontSize: '13px',
+                  width: '100%',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {(() => {
+                  const apiMetalNames = apiMetalTypes.map(m => m.name);
+                  const defaultMetals = METAL_TYPES.filter(m => m !== 'All');
+                  const combined = Array.from(new Set([...defaultMetals, ...apiMetalNames]));
+                  return ['All', ...combined].map(metal => (
+                    <option key={metal} value={metal}>{metal}</option>
+                  ));
+                })()}
+              </select>
+            </div>
+          </div>
+
+          {/* Main Product Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-xl">
+            <AnimatePresence>
+              {filtered.map(product => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onToggleFeatured={handleToggleFeatured}
+                  onEdit={p => { setPrefill(null); setEditProduct(p); }}
+                  onDuplicate={handleDuplicate}
+                  onDelete={p => setDeleteProduct(p)}
+                />
+              ))}
+            </AnimatePresence>
+
+            {filtered.length === 0 && (
+              <div
+                className="col-span-1 md:col-span-2 lg:col-span-3 text-center"
+                style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '48px 24px', border: `1px solid ${T.ivoryShade}` }}
+              >
+                <p style={{ fontSize: '13.5px', color: T.muted, marginBottom: '18px' }}>
+                  {hasActiveFilters ? 'No products match your filters.' : 'No products yet.'}
+                </p>
+                {hasActiveFilters ? (
+                  <button
+                    onClick={clearFilters}
+                    style={{
+                      fontSize: '13px', fontWeight: 600, color: T.navy, backgroundColor: T.ivory,
+                      border: `1px solid ${T.ivoryShade}`, borderRadius: '10px', padding: '10px 20px', cursor: 'pointer',
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setPrefill(null); setAddModalOpen(true); }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '8px',
+                      fontSize: '13px', fontWeight: 600, color: T.gold, backgroundColor: T.navy,
+                      border: 'none', borderRadius: '10px', padding: '11px 20px', cursor: 'pointer',
+                    }}
+                  >
+                    <Plus size={16} /> Add Your First Product
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
