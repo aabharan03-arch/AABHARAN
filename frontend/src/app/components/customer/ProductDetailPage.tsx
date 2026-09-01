@@ -11,6 +11,7 @@ import {
   Heart,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
 import { EnquiryModal } from '../shared/EnquiryModal';
 import { API_BASE_URL } from '../../lib/api';
@@ -36,6 +37,7 @@ export interface Store {
 
 export interface ProcessedStore {
   id: string;
+  storeAdminId?: string;
   name: string;
   logo: string;
   city: string;
@@ -68,6 +70,40 @@ const PRODUCTS_CACHE_KEY = 'aabharan_products_cache';
 const STORES_CACHE_KEY = 'aabharan_stores_cache';
 const CACHE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes cache duration
 
+// --- Wishlist API helpers (same pattern as ProductSection) ---
+function authHeaders(): Record<string, string> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function fetchWishlistIds(): Promise<string[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/customer/wishlist`, {
+      headers: { ...authHeaders() },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.productIds ?? []) as string[];
+  } catch {
+    return [];
+  }
+}
+
+async function toggleWishlist(productId: string): Promise<boolean> {
+  const res = await fetch(`${API_BASE_URL}/api/customer/wishlist/toggle`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ productId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Failed to update wishlist (${res.status})`);
+  }
+  const data = await res.json();
+  return data.liked as boolean;
+}
+// -----------------------------------------------------------------
+
 export function ProductDetailPage() {
   const { productId } = useParams();
   const navigate = useNavigate();
@@ -79,7 +115,12 @@ export function ProductDetailPage() {
 
   const [activeImg, setActiveImg] = useState<number>(0);
   const [enquiryOpen, setEnquiryOpen] = useState<boolean>(false);
+
+  // Wishlist state — real "saved" status backed by the API, plus an
+  // in-flight flag so the heart button can show a spinner and can't
+  // be double-clicked into two overlapping requests.
   const [saved, setSaved] = useState<boolean>(false);
+  const [wishlistBusy, setWishlistBusy] = useState<boolean>(false);
 
   // Reset image view index when route/productId changes
   useEffect(() => {
@@ -142,6 +183,7 @@ export function ProductDetailPage() {
                   const mainBranchCity = s.branches?.[0]?.city;
                   return {
                     id: s.id,
+                    storeAdminId: admin.id,
                     name: s.name,
                     logo: s.logo,
                     coverBanner: s.coverBanner,
@@ -182,8 +224,14 @@ export function ProductDetailPage() {
 
   const store = useMemo(() => {
     if (!product) return undefined;
-    return memoizedStores.find((s) => String(s.id) === String(product.storeId));
+    return memoizedStores.find(
+      (s) =>
+        String(s.id) === String(product.storeId) ||
+        String(s.storeAdminId ?? '') === String(product.storeId)
+    );
   }, [memoizedStores, product]);
+
+  const storeRouteId = store?.id ?? product?.storeId;
 
   const relatedProducts = useMemo(() => {
     if (!product) return [];
@@ -202,6 +250,46 @@ export function ProductDetailPage() {
     }
     return ['https://via.placeholder.com/600?text=No+Image+Available'];
   }, [product]);
+
+  // --- Fetch wishlist status once we know which product we're viewing ---
+  useEffect(() => {
+    if (!product) return;
+
+    let cancelled = false;
+    fetchWishlistIds().then((ids) => {
+      if (!cancelled) {
+        setSaved(ids.includes(String(product.id)));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [product?.id]);
+
+  const handleToggleSaved = async () => {
+    if (!product || wishlistBusy) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/auth');
+      return;
+    }
+
+    const previousSaved = saved;
+    setWishlistBusy(true);
+    setSaved(!previousSaved); // optimistic flip
+
+    try {
+      const liked = await toggleWishlist(String(product.id));
+      setSaved(liked); // reconcile with server truth
+    } catch (err) {
+      console.error('Failed to update wishlist:', err);
+      setSaved(previousSaved); // revert on failure
+    } finally {
+      setWishlistBusy(false);
+    }
+  };
 
   // --- SKELETON LOADING STATE ---
   if (isLoading) {
@@ -337,14 +425,20 @@ export function ProductDetailPage() {
                     {product.name}
                   </h1>
                   <button
-                    onClick={() => setSaved((s) => !s)}
-                    className={`w-12 h-12 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all cursor-pointer ${
+                    onClick={handleToggleSaved}
+                    disabled={wishlistBusy}
+                    aria-label={saved ? 'Remove from liked products' : 'Save to liked products'}
+                    className={`w-12 h-12 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed ${
                       saved
                         ? 'bg-red-50 border-red-200 text-red-500'
                         : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300 hover:text-[#04091e]'
                     }`}
                   >
-                    <Heart size={20} className={saved ? 'fill-red-500' : ''} />
+                    {wishlistBusy ? (
+                      <Loader2 size={20} className="animate-spin" />
+                    ) : (
+                      <Heart size={20} className={saved ? 'fill-red-500' : ''} />
+                    )}
                   </button>
                 </div>
 
@@ -401,9 +495,9 @@ export function ProductDetailPage() {
                 >
                   <MessageCircle size={20} /> Enquire Now
                 </button>
-                {store && (
+                {storeRouteId && (
                   <button
-                    onClick={() => navigate(`/stores/${store.id}`)}
+                    onClick={() => navigate(`/stores/${storeRouteId}`)}
                     className="flex-1 py-4 bg-white border-2 border-gray-200 text-[#04091e] text-base font-bold rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center justify-center cursor-pointer"
                   >
                     View Store Details
@@ -417,8 +511,8 @@ export function ProductDetailPage() {
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
                 Sold By
               </h3>
-              {store ? (
-                <Link to={`/stores/${store.id}`} className="flex items-center gap-6 group">
+              {storeRouteId ? (
+                <Link to={`/stores/${storeRouteId}`} className="flex items-center gap-6 group block">
                   <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-100 shadow-sm flex-shrink-0 group-hover:border-[#04091e]/30 transition-colors p-0.5 bg-white">
                     <img
                       src={storeLogo}
@@ -432,11 +526,11 @@ export function ProductDetailPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xl font-extrabold text-[#04091e] group-hover:text-blue-700 transition-colors truncate">
-                      {store.name}
+                      {store?.name || storeDisplayName}
                     </p>
                     <p className="text-sm font-bold text-gray-500 mt-1 uppercase tracking-wider">
-                      {store.city} · {store.branches?.length || 0} Branch
-                      {(store.branches?.length || 0) !== 1 ? 'es' : ''}
+                      {(store?.city || 'Main Branch')} · {(store?.branches?.length || 0) || 0} Branch
+                      {((store?.branches?.length || 0) !== 1 ? 'es' : '')}
                     </p>
                   </div>
                   <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-[#04091e] group-hover:bg-[#04091e] group-hover:text-white transition-colors flex-shrink-0">
@@ -463,9 +557,9 @@ export function ProductDetailPage() {
           <div className="mt-24">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
               <h2 className="text-3xl font-extrabold text-[#04091e]">You Might Also Like</h2>
-              {store && (
+              {storeRouteId && (
                 <button
-                  onClick={() => navigate(`/stores/${store.id}`)}
+                  onClick={() => navigate(`/stores/${storeRouteId}`)}
                   className="text-[#04091e] font-bold text-sm hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   View more from this store <ArrowRight size={16} />

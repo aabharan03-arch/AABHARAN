@@ -29,7 +29,7 @@ export async function GET(req: Request) {
       )
     );
 
-    // 3. Fetch matching StoreAdmins and select only essential Store info
+    // 3. Fetch matching StoreAdmins and select essential Store info + contact email
     const storeAdmins = storeAdminIds.length > 0
       ? await prisma.storeAdmin.findMany({
           where: {
@@ -39,23 +39,33 @@ export async function GET(req: Request) {
           },
           select: {
             id: true,
+            email: true, // fallback contact if Store has no email set
             store: {
               select: {
                 id: true,
                 name: true,
                 logo: true,
+                email: true, // preferred contact for customer enquiries
               },
             },
           },
         })
       : [];
 
-    // 4. Map StoreAdmin ID to its Store details for O(1) lookup
-    const storeMap = new Map<string, { id: string; name: string; logo: string | null }>();
-    
+    // 4. Map StoreAdmin ID to its Store details (+ resolved contact email) for O(1) lookup
+    const storeMap = new Map<
+      string,
+      { id: string; name: string; logo: string | null; email: string | null }
+    >();
+
     for (const sa of storeAdmins as any[]) {
       if (sa.store) {
-        storeMap.set(sa.id.trim(), sa.store);
+        storeMap.set(sa.id.trim(), {
+          ...sa.store,
+          // Store.email may be unset for stores that haven't filled in
+          // contact details yet — fall back to the StoreAdmin's own login email.
+          email: sa.store.email || sa.email || null,
+        });
       }
     }
 
@@ -78,6 +88,7 @@ export async function GET(req: Request) {
         storeId: product.storeId,
         storeName: matchedStore?.name || null,
         storeLogo: matchedStore?.logo || null,
+        storeEmail: matchedStore?.email || null, // needed by the Enquiry modal to know where to send
         createdAt: product.createdAt,
         updatedAt: product.updatedAt,
       };

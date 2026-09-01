@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Modal, Button, InputField, TextareaField } from '@figma/astraui';
 import type { Product } from '../data/mockData';
+import { API_BASE_URL } from '../../lib/api';
 
 interface Props {
   product: Product | null;
@@ -8,31 +9,87 @@ interface Props {
   onClose: () => void;
 }
 
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 export function EnquiryModal({ product, isOpen, onClose }: Props) {
   const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit() {
-    if (!form.name || !form.email || !form.phone) return;
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
+  // Reset everything each time the modal opens for a (possibly different) product
+  useEffect(() => {
+    if (isOpen) {
       setForm({ name: '', email: '', phone: '', message: '' });
-      onClose();
-    }, 2000);
+      setSubmitted(false);
+      setSubmitting(false);
+      setError(null);
+    }
+  }, [isOpen, product?.id]);
+
+  async function handleSubmit() {
+    setError(null);
+
+    if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) {
+      setError('Name, email, and phone are required.');
+      return;
+    }
+    if (!isValidEmail(form.email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (!product) {
+      setError('No product selected.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/customer/products/${product.id}/enquiry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: form.name.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+          message: form.message.trim() || 'No message provided.',
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send enquiry. Please try again.');
+      }
+
+      setSubmitted(true);
+      setTimeout(() => {
+        setSubmitted(false);
+        setForm({ name: '', email: '', phone: '', message: '' });
+        onClose();
+      }, 2000);
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={submitted ? 'Enquiry Sent!' : `Enquire about ${product?.name ?? 'this product'}`}
+      title={submitted ? 'Enquiry Submitted!' : `Enquire about ${product?.name ?? 'this product'}`}
       size="medium"
       footer={
         submitted ? undefined : (
           <>
-            <Button variant="neutral" onClick={onClose}>Cancel</Button>
-            <Button variant="primary" onClick={handleSubmit}>Send Enquiry</Button>
+            <Button variant="neutral" onClick={onClose} disabled={submitting}>Cancel</Button>
+            <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
+              {submitting ? 'Sending...' : 'Send Enquiry'}
+            </Button>
           </>
         )
       }
@@ -43,8 +100,8 @@ export function EnquiryModal({ product, isOpen, onClose }: Props) {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
           <div>
-            <p className="text-label font-semibold text-text-primary" style={{ fontFamily: 'var(--font-family-sans)' }}>Your enquiry has been sent!</p>
-            <p className="text-label-sm text-text-secondary mt-xs" style={{ fontFamily: 'var(--font-family-sans)' }}>The jewellery store will contact you within 24 hours.</p>
+            <p className="text-label font-semibold text-text-primary" style={{ fontFamily: 'var(--font-family-sans)' }}>Your enquiry has been submitted!</p>
+            <p className="text-label-sm text-text-secondary mt-xs" style={{ fontFamily: 'var(--font-family-sans)' }}>The jewellery store will contact you soon. Please check your email regularly for their response.</p>
           </div>
         </div>
       ) : (
@@ -58,6 +115,21 @@ export function EnquiryModal({ product, isOpen, onClose }: Props) {
               </div>
             </div>
           )}
+
+          {error && (
+            <div
+              className="text-label-sm rounded-corner-md p-md"
+              style={{
+                fontFamily: 'var(--font-family-sans)',
+                backgroundColor: 'rgba(220, 38, 38, 0.08)',
+                border: '1px solid rgba(220, 38, 38, 0.25)',
+                color: '#b91c1c',
+              }}
+            >
+              {error}
+            </div>
+          )}
+
           <InputField
             label="Full Name"
             placeholder="Your full name"

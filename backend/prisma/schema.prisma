@@ -34,6 +34,9 @@ model StoreAdmin {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
+  enquiries Enquiry[]
+
+
   metalTypes MetalType[]
   categories Category[]
 
@@ -118,6 +121,9 @@ model Product {
   storeName    String
   storeLogo    String?
 
+  enquiries Enquiry[]
+
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   wishlistedBy WishlistItem[]
@@ -168,4 +174,32 @@ model Category {
   updatedAt    DateTime   @updatedAt
 
   @@unique([storeAdminId, name])
+}
+
+// Add to prisma/schema.prisma
+
+model Enquiry {
+  id            String   @id @default(cuid())
+  productId     String
+  storeAdminId  String   // resolved from Product.storeId at creation time — who owns this enquiry
+  fullName      String
+  email         String
+  phone         String?
+  message       String
+  status        EnquiryStatus @default(NEW)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  storeAdmin    StoreAdmin  @relation(fields: [storeAdminId], references: [id], onDelete: Cascade)
+
+  @@index([storeAdminId])
+  @@index([productId])
+  @@index([status])
+}
+
+enum EnquiryStatus {
+  NEW
+  CONTACTED
+  CLOSED
 }
