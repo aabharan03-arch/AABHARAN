@@ -225,3 +225,39 @@ export async function changePassword(currentPassword: string, newPassword: strin
   const data = await res.json();
   return data.message as string;
 }
+
+// ---------------------------------------------------------------------------
+// Category API Methods
+// ---------------------------------------------------------------------------
+
+export async function fetchCategories() {
+  const res = await fetch(`${API_BASE_URL}/api/storeadmin/categories`, {
+    headers: { ...authHeaders() },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Failed to fetch categories (${res.status})`);
+  }
+
+  const data = await res.json();
+  return (data.categories || []) as Array<{ id: string; name: string; description?: string }>;
+}
+
+// ---------------------------------------------------------------------------
+// Metal Type API Methods
+// ---------------------------------------------------------------------------
+
+export async function fetchMetalTypes() {
+  const res = await fetch(`${API_BASE_URL}/api/storeadmin/metal-types`, {
+    headers: { ...authHeaders() },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Failed to fetch metal types (${res.status})`);
+  }
+
+  const data = await res.json();
+  return (data.metalTypes || []) as Array<{ id: string; name: string; description?: string }>;
+}

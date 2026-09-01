@@ -70,9 +70,33 @@ export interface Enquiry {
 }
 
 export const CATEGORIES = [
-  'All', 'Rings', 'Bangles', 'Necklaces', 'Chains', 'Bracelets',
-  'Pendants', 'Earrings', 'Anklets', 'Bridal Sets', 'Kids Jewellery',
-  'Temple Jewellery', 'Diamond Jewellery', 'Silver Jewellery', 'Platinum Jewellery',
+  'All',
+  'Rings',
+  'Earrings',
+  'Bali',
+  'Chain',
+  'Pendants',
+  'Pendant Set',
+  'Mangalsutra',
+  'Spectacles',
+  'Chain Set',
+  'Necklace',
+  'Bangles',
+  'Nose Pins/Rings',
+  'Maang Tikka',
+  'Bracelets',
+  'Ear Chain',
+  'Armlet',
+  'Long Set',
+  'Kamarband',
+  'Anklet / Toe Rings',
+  'Gents Kada / Bracelets',
+  'Watches',
+  'Cufflinks',
+  'Coins',
+  'Others',
+  'Pen',
+  'Electroforming Jewellery',
 ];
 
 export const METAL_TYPES = [

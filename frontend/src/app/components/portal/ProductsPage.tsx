@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Search, Edit, Trash2, Copy, Star, Eye, X, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CATEGORIES, METAL_TYPES } from '../data/mockData';
 import type { Product } from '../data/mockData';
-import { fetchProducts, createProduct, updateProduct, deleteProduct as deleteProductApi, getCurrentStoreId } from '../../lib/api';
+import { fetchProducts, createProduct, updateProduct, deleteProduct as deleteProductApi, getCurrentStoreId, fetchCategories, fetchMetalTypes } from '../../lib/api';
 
 const PURITY_OPTIONS = ['22K', '24K', '18K', '925 Sterling Silver', 'PT950', 'PT900'];
 
@@ -25,6 +25,10 @@ export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // API-fetched categories and metal types
+  const [apiCategories, setApiCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [apiMetalTypes, setApiMetalTypes] = useState<Array<{ id: string; name: string }>>([]);
 
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
@@ -55,7 +59,20 @@ export function ProductsPage() {
           const parsedCache = JSON.parse(cached);
           setProducts(parsedCache);
           setLoading(false);
-          return; // Skip API call if cache hit
+          // Still fetch categories and metal types in background
+          try {
+            const cats = await fetchCategories();
+            setApiCategories(cats);
+          } catch (err) {
+            console.error('Failed to fetch categories:', err);
+          }
+          try {
+            const metals = await fetchMetalTypes();
+            setApiMetalTypes(metals);
+          } catch (err) {
+            console.error('Failed to fetch metal types:', err);
+          }
+          return; // Skip main API call if cache hit
         } catch {
           localStorage.removeItem(cacheKey);
         }
@@ -64,9 +81,15 @@ export function ProductsPage() {
 
     // 2. Fetch from API if no cache or cache ignored
     try {
-      const data = await fetchProducts(storeId);
+      const [data, cats, metals] = await Promise.all([
+        fetchProducts(storeId),
+        fetchCategories(),
+        fetchMetalTypes(),
+      ]);
       const productList = data as Product[];
       setProducts(productList);
+      setApiCategories(cats);
+      setApiMetalTypes(metals);
       // Save data locally
       localStorage.setItem(cacheKey, JSON.stringify(productList));
     } catch (err: any) {
@@ -226,7 +249,11 @@ export function ProductsPage() {
               Category
             </span>
             <div className="flex gap-xs flex-wrap">
-              {['All', ...CATEGORIES.slice(1, 7)].map(cat => {
+              {(() => {
+                const apiCatNames = apiCategories.map(c => c.name);
+                const defaultCats = CATEGORIES.filter(c => c !== 'All');
+                const combined = Array.from(new Set([...defaultCats, ...apiCatNames]));
+                return ['All', ...combined].map(cat => {
                 const active = categoryFilter === cat;
                 return (
                   <button
@@ -247,7 +274,7 @@ export function ProductsPage() {
                     {cat}
                   </button>
                 );
-              })}
+              })})}
             </div>
           </div>
         </div>
@@ -261,7 +288,11 @@ export function ProductsPage() {
               Metal Type
             </span>
             <div className="flex gap-xs flex-wrap">
-              {['All', ...METAL_TYPES.filter(m => m !== 'All')].map(metal => {
+              {(() => {
+                const apiMetalNames = apiMetalTypes.map(m => m.name);
+                const defaultMetals = METAL_TYPES.filter(m => m !== 'All');
+                const combined = Array.from(new Set([...defaultMetals, ...apiMetalNames]));
+                return ['All', ...combined].map(metal => {
                 const active = metalFilter === metal;
                 return (
                   <button
@@ -282,7 +313,7 @@ export function ProductsPage() {
                     {metal}
                   </button>
                 );
-              })}
+              })})}
             </div>
           </div>
 
@@ -391,6 +422,8 @@ export function ProductsPage() {
         isOpen={addModalOpen || editProduct !== null}
         product={editProduct}
         prefill={prefill}
+        apiCategories={apiCategories}
+        apiMetalTypes={apiMetalTypes}
         onClose={() => { setAddModalOpen(false); setEditProduct(null); setPrefill(null); }}
         onSaved={(saved, isNew) => {
           if (isNew) {
@@ -682,15 +715,21 @@ function ProductCard({
 // ---------------------------------------------------------------------------
 // Product Form Modal Component (Multiple Image Upload Support)
 // ---------------------------------------------------------------------------
-function ProductFormModal({ isOpen, product, prefill, onClose, onSaved }: {
+function ProductFormModal({ isOpen, product, prefill, apiCategories, apiMetalTypes, onClose, onSaved }: {
   isOpen: boolean;
   product: Product | null;
   prefill: Partial<Product> | null;
+  apiCategories: Array<{ id: string; name: string }>;
+  apiMetalTypes: Array<{ id: string; name: string }>;
   onClose: () => void;
   onSaved: (p: Product, isNew: boolean) => void;
 }) {
+  // Use first API category/metal as default, fallback to hardcoded defaults
+  const defaultCategory = apiCategories.length > 0 ? apiCategories[0].name : 'Rings';
+  const defaultMetalType = apiMetalTypes.length > 0 ? apiMetalTypes[0].name : '22K Gold';
+
   const initial = product ?? prefill ?? {
-    name: '', category: 'Rings', metalType: '22K Gold', purity: '22K', weight: '', description: '', featured: false, displayOrder: 1,
+    name: '', category: defaultCategory, metalType: defaultMetalType, purity: '22K', weight: '', description: '', featured: false, displayOrder: 1,
     images: [],
     storeId: CURRENT_STORE_ID_FALLBACK, storeName: 'Tanishq', storeLogo: '', views: 0,
   };
@@ -704,7 +743,7 @@ function ProductFormModal({ isOpen, product, prefill, onClose, onSaved }: {
   // Re-sync form when switching between add / edit / duplicate-prefill
   useEffect(() => {
     const currentData = product ?? prefill ?? {
-      name: '', category: 'Rings', metalType: '22K Gold', purity: '22K', weight: '', description: '', featured: false, displayOrder: 1,
+      name: '', category: defaultCategory, metalType: defaultMetalType, purity: '22K', weight: '', description: '', featured: false, displayOrder: 1,
       images: [],
       storeId: CURRENT_STORE_ID_FALLBACK, storeName: 'Tanishq', storeLogo: '', views: 0,
     };
@@ -712,7 +751,7 @@ function ProductFormModal({ isOpen, product, prefill, onClose, onSaved }: {
     setExistingImages(currentData.images || []);
     setImageFiles([]);
     setError(null);
-  }, [product, prefill, isOpen]);
+  }, [product, prefill, isOpen, defaultCategory, defaultMetalType]);
 
   // Append newly picked files without overwriting existing selection
   function handleImageFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -822,14 +861,22 @@ function ProductFormModal({ isOpen, product, prefill, onClose, onSaved }: {
           <div className="flex gap-lg flex-col sm:flex-row">
             <div className="flex-1">
               <label style={labelStyle}>Category</label>
-              <select style={inputStyle} value={form.category ?? 'Rings'} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
-                {CATEGORIES.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c}</option>)}
+              <select style={inputStyle} value={form.category ?? defaultCategory} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                {(() => {
+                  const apiCatNames = apiCategories.map(c => c.name);
+                  const defaultCats = CATEGORIES.filter(c => c !== 'All');
+                  return Array.from(new Set([...defaultCats, ...apiCatNames])).map(c => <option key={c} value={c}>{c}</option>);
+                })()}
               </select>
             </div>
             <div className="flex-1">
               <label style={labelStyle}>Metal Type</label>
-              <select style={inputStyle} value={form.metalType ?? '22K Gold'} onChange={e => setForm(f => ({ ...f, metalType: e.target.value }))}>
-                {METAL_TYPES.filter(m => m !== 'All').map(m => <option key={m} value={m}>{m}</option>)}
+              <select style={inputStyle} value={form.metalType ?? defaultMetalType} onChange={e => setForm(f => ({ ...f, metalType: e.target.value }))}>
+                {(() => {
+                  const apiMetalNames = apiMetalTypes.map(m => m.name);
+                  const defaultMetals = METAL_TYPES.filter(m => m !== 'All');
+                  return Array.from(new Set([...defaultMetals, ...apiMetalNames])).map(m => <option key={m} value={m}>{m}</option>);
+                })()}
               </select>
             </div>
           </div>
