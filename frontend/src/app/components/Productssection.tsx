@@ -28,6 +28,8 @@ interface ProductSectionProps {
   onEnquire: (product: Product) => void;
 }
 
+import { API_BASE_URL } from '../lib/api';
+
 const CATEGORIES_LIST = ['All', 'Rings', 'Necklaces', 'Earrings', 'Bracelets', 'Bangles'];
 const METALS_LIST = ['All Metals', 'Gold', 'Silver', 'Diamond'];
 
@@ -42,7 +44,7 @@ function authHeaders(): Record<string, string> {
 
 async function fetchWishlistIds(): Promise<string[]> {
   try {
-    const res = await fetch('http://localhost:3000/api/customer/wishlist', {
+    const res = await fetch(`${API_BASE_URL}/api/customer/wishlist`, {
       headers: { ...authHeaders() },
     });
     if (!res.ok) return [];
@@ -54,7 +56,7 @@ async function fetchWishlistIds(): Promise<string[]> {
 }
 
 async function toggleWishlist(productId: string | number): Promise<boolean> {
-  const res = await fetch('http://localhost:3000/api/customer/wishlist/toggle', {
+  const res = await fetch(`${API_BASE_URL}/api/customer/wishlist/toggle`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ productId: String(productId) }),
