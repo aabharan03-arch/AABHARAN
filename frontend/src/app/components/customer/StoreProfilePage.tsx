@@ -554,7 +554,17 @@ function StoreProductCard({ product, onEnquire }: { product: Product; onEnquire:
     <motion.div
       whileHover={{ y: -6 }}
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-      className="bg-white rounded-[24px] overflow-hidden border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 group flex flex-col"
+      className="bg-white rounded-[24px] overflow-hidden border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 group flex flex-col cursor-pointer"
+      onClick={() => navigate(`/products/${product.id}`)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          navigate(`/products/${product.id}`);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${product.name} details`}
     >
       <div className="relative h-[280px] overflow-hidden bg-[#f9f7ee] flex-shrink-0 flex items-center justify-center">
         {mainImage ? (
@@ -611,13 +621,19 @@ function StoreProductCard({ product, onEnquire }: { product: Product; onEnquire:
         
         <div className="flex gap-3 pt-3 mt-auto">
           <button
-            onClick={() => navigate(`/products/${product.id}`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/products/${product.id}`);
+            }}
             className="flex-1 py-3.5 bg-white border border-gray-200 rounded-xl text-sm font-bold text-[#04091e] hover:border-gray-300 hover:bg-gray-50 transition-all"
           >
             Details
           </button>
           <button
-            onClick={onEnquire}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEnquire();
+            }}
             className="flex-1 py-3.5 bg-[#04091e] shadow-md rounded-xl text-sm font-bold text-white hover:bg-[#04091e]/90 hover:shadow-lg transition-all"
           >
             Enquire
