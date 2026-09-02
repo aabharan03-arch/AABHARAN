@@ -27,6 +27,8 @@ model StoreAdmin {
   name      String        @default("Suvarna")
   password  String        // Hashed password
   status    AccountStatus @default(ACTIVE)
+  payments Payment[]
+
 
   // 1-to-1 relationship with Store
   store     Store?        
@@ -212,6 +214,8 @@ model Plan {
   cost        Float
 
   subscriptions StoreSubscription[]
+  payments Payment[]
+
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -237,4 +241,49 @@ model StoreSubscription {
   @@index([storeAdminId])
   @@index([planId])
   @@index([isActive])
+}
+
+enum PaymentStatus {
+  PAID
+  PENDING
+  FAILED
+  REFUN
+}
+
+enum PaymentMethod {
+  UPI
+  CASH
+  CARD
+  BANK_TRANSFER
+  CHEQUE
+  OTHER
+}
+
+model Payment {
+  id           String        @id @default(uuid())
+  invoiceNo    String        @unique                  // e.g. INV-2025-0001
+  txnRef       String?                                // transaction reference / UTR / cheque.
+
+  storeAdminId String
+  storeAdmin   StoreAdmin    @relation(fields: [storeAdminId], references: [id], onDelete: Cascade)
+
+  planId       String?
+  plan         Plan?         @relation(fields: [planId], references: [id])
+  planName     String                                 // snapshot of plan name at payment time
+
+  method       PaymentMethod @default(UPI)
+  amount       Float
+  discount     Float         @default(0)
+  status       PaymentStatus @default(PAID)
+  collectedBy  String        @default("Admin")
+  notes        String?
+
+  paidAt       DateTime      @default(now())          // the payment date shown in the table
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([storeAdminId])
+  @@index([status])
+  @@index([paidAt])
 }
