@@ -5,9 +5,9 @@ import bcrypt from 'bcryptjs';
 function getCorsHeaders(origin: string | null) {
   const allowedOrigins = [
     'http://localhost:5173',
-    'https://aabharan03.vercel.app/', 
-    'https://www.aabharan.in/',
-    'https://aabharan.in/',
+    'https://aabharan03.vercel.app', 
+    'https://www.aabharan.in',
+    'https://aabharan.in',
     // add your prod frontend domain(s)
   ];
 
