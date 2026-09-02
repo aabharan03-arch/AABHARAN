@@ -36,6 +36,7 @@ model StoreAdmin {
 
   enquiries Enquiry[]
 
+  subscriptions StoreSubscription[]
 
   metalTypes MetalType[]
   categories Category[]
@@ -203,4 +204,37 @@ enum EnquiryStatus {
   IN_PROGRESS
   CONTACTED
   CLOSED
+}
+model Plan {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  months      Int
+  cost        Float
+
+  subscriptions StoreSubscription[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model StoreSubscription {
+  id            String   @id @default(uuid())
+
+  storeAdminId  String
+  storeAdmin    StoreAdmin @relation(fields: [storeAdminId], references: [id], onDelete: Cascade)
+
+  planId        String
+  plan          Plan       @relation(fields: [planId], references: [id])
+
+  amountPaid    Float
+  startDate     DateTime   @default(now())
+  expiryDate    DateTime
+  isActive      Boolean    @default(true)
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([storeAdminId])
+  @@index([planId])
+  @@index([isActive])
 }

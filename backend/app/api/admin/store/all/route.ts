@@ -14,7 +14,7 @@ export async function OPTIONS() {
 
 export async function GET(req: Request) {
   try {
-    // 1. Fetch StoreAdmins with nested Store and Branch relations
+    // 1. Fetch StoreAdmins with nested Store, Branch, and active Subscription+Plan relations
     const storeAdmins = await prisma.storeAdmin.findMany({
       select: {
         id: true,
@@ -23,6 +23,24 @@ export async function GET(req: Request) {
         status: true,
         createdAt: true,
         updatedAt: true,
+        subscriptions: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            amountPaid: true,
+            startDate: true,
+            expiryDate: true,
+            plan: {
+              select: {
+                id: true,
+                name: true,
+                months: true,
+                cost: true,
+              },
+            },
+          },
+          take: 1,
+        },
         store: {
           select: {
             id: true,
@@ -65,7 +83,8 @@ export async function GET(req: Request) {
     });
 
     // 2. Extract StoreAdmin IDs (Since Product.storeId = decoded.id = StoreAdmin.id)
-const adminIds = storeAdmins.map((sa: { id: string }) => sa.id);
+    const adminIds = storeAdmins.map((sa: { id: string }) => sa.id);
+
     // 3. Fetch products where storeId matches StoreAdmin.id
     const products = adminIds.length > 0
       ? await prisma.product.findMany({
@@ -85,7 +104,7 @@ const adminIds = storeAdmins.map((sa: { id: string }) => sa.id);
 
     for (const product of products) {
       if (!product.storeId) continue;
-      
+
       const key = product.storeId.trim();
       if (!productsByAdminId.has(key)) {
         productsByAdminId.set(key, []);
@@ -93,12 +112,34 @@ const adminIds = storeAdmins.map((sa: { id: string }) => sa.id);
       productsByAdminId.get(key)!.push(product);
     }
 
-    // 5. Attach product list into store.products
-const formattedStoreAdmins = storeAdmins.map((sa: any) => {
-        const adminProducts = productsByAdminId.get(sa.id.trim()) || [];
+    // 5. Attach product list into store.products, and flatten active subscription/plan
+    const formattedStoreAdmins = storeAdmins.map((sa: any) => {
+      const adminProducts = productsByAdminId.get(sa.id.trim()) || [];
+      const activeSubscription = sa.subscriptions?.[0] || null;
 
       return {
-        ...sa,
+        id: sa.id,
+        name: sa.name,
+        email: sa.email,
+        status: sa.status,
+        createdAt: sa.createdAt,
+        updatedAt: sa.updatedAt,
+        plan: activeSubscription?.plan
+          ? {
+              id: activeSubscription.plan.id,
+              name: activeSubscription.plan.name,
+              months: activeSubscription.plan.months,
+              cost: activeSubscription.plan.cost,
+            }
+          : null,
+        subscription: activeSubscription
+          ? {
+              id: activeSubscription.id,
+              amountPaid: activeSubscription.amountPaid,
+              startDate: activeSubscription.startDate,
+              expiryDate: activeSubscription.expiryDate,
+            }
+          : null,
         store: sa.store
           ? {
               ...sa.store,
