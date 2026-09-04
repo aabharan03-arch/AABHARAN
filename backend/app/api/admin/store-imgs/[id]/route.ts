@@ -119,7 +119,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
       uploadedKey = `store-images/existing.storeAdminId/{existing.storeAdminId}/existing.storeAdminId/{(type ?? existing.type).toLowerCase()}/crypto.randomUUID().{crypto.randomUUID()}.crypto.randomUUID().{ext}`;
 
-      const { url } = await uploadToSpaces(buffer, uploadedKey, file.type);
+      const  url  = await uploadToSpaces(buffer, uploadedKey, file.type);
       data.img = url;
 
       // best-effort cleanup of the old object
