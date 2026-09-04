@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import jwt from 'jsonwebtoken';
 import path from 'path';
 import { uploadToSpaces, deleteFromSpaces } from '@/lib/spaces';
+import { StoreImageType } from '@prisma/client';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -178,7 +179,7 @@ export async function POST(req: Request) {
 
     // --- Cap check per type ---
     const count = await prisma.storeAdminImg.count({
-      where: { storeAdminId, type, isActive: true },
+      where: { storeAdminId, type: type as StoreImageType, isActive: true },
     });
     if (count >= CAPS[type]) {
       return NextResponse.json(
@@ -210,7 +211,7 @@ export async function POST(req: Request) {
       const image = await prisma.storeAdminImg.create({
         data: {
           img: url,
-          type,
+          type: type as StoreImageType,
           expiryDate: expiryDate ? new Date(expiryDate) : null,
           displayOrder:
             typeof displayOrderRaw === 'string' && !isNaN(parseInt(displayOrderRaw, 10))
