@@ -30,3 +30,8 @@ export async function deleteFromSpaces(key: string) {
     })
   );
 }
+
+export function keyFromUrl(url: string) {
+  const cdn = process.env.DO_SPACES_CDN!;
+  return url.startsWith(cdn) ? url.slice(cdn.length).replace(/^\//, "") : null;
+}

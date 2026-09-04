@@ -37,6 +37,8 @@ model StoreAdmin {
   updatedAt DateTime      @updatedAt
 
   enquiries Enquiry[]
+  images StoreAdminImg[]   // <-- add this line
+
 
   subscriptions StoreSubscription[]
 
@@ -70,6 +72,8 @@ model Store {
 
   // Branches
   branches      Branch[]
+  images StoreAdminImg[]   // <-- add this line
+
 
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -287,3 +291,33 @@ model Payment {
   @@index([status])
   @@index([paidAt])
 }
+enum StoreImageType {
+  COVER_PHOTO
+  FIRST_PHOTO
+  ADVERTISE_PHOTO
+}
+
+model StoreAdminImg {
+  id           String         @id @default(uuid())
+  img          String                                  // image URL (Cloudinary/S3)
+  type         StoreImageType
+  expiryDate   DateTime?                               // null = never expires
+
+  storeAdminId String
+  storeAdmin   StoreAdmin     @relation(fields: [storeAdminId], references: [id], onDelete: Cascade)
+
+  storeId      String?                                 // owning store (resolved from storeAdmin)
+  store        Store?         @relation(fields: [storeId], references: [id], onDelete: SetNull)
+
+  displayOrder Int            @default(1)
+  isActive     Boolean        @default(true)
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([storeAdminId, type])
+  @@index([storeId, type])
+  @@index([storeId, isActive])
+}
+
+
