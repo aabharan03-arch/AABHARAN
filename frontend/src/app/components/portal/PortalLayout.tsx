@@ -42,7 +42,7 @@ export function PortalLayout() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const secondaryNavItems = [
-    { icon: Home, path: '/portal', label: 'Dashboard' },
+    // { icon: Home, path: '/portal', label: 'Dashboard' },
     { icon: Package, path: '/portal/products', label: 'Products' },
     { icon: Store, path: '/portal/store', label: 'Store Settings' },
     { icon: MessageSquare, path: '/portal/enquiries', label: 'Enquiries' },

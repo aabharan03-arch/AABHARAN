@@ -67,10 +67,10 @@ const MAX_BYTES = 5 * 1024 * 1024; // 5MB
 // =====================================================
 export async function GET(req: Request) {
   try {
-    const auth = verifyAnyToken(req);
-    if ('error' in auth) {
-      return NextResponse.json({ error: auth.error }, { status: auth.status, headers: corsHeaders });
-    }
+    // const auth = verifyAnyToken(req);
+    // if ('error' in auth) {
+    //   return NextResponse.json({ error: auth.error }, { status: auth.status, headers: corsHeaders });
+    // }
 
     const { searchParams } = new URL(req.url);
     const type = searchParams.get('type');

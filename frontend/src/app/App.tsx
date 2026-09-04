@@ -59,8 +59,8 @@ export default function App() {
           {/* Portal */}
           <Route path="/portal/login" element={<PortalLoginPage />} />
           <Route path="/portal" element={<PortalLayout />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="products" element={<ProductsPage />} />
+            {/* <Route index element={<DashboardPage />} /> */}
+            <Route index element={<ProductsPage />} />
             <Route path="store" element={<StorePage />} />
             <Route path="enquiries" element={<EnquiriesPage />} />
             <Route path="gallery" element={<GalleryPage />} />
