@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Link } from 'react-router';
+import { API_BASE_URL } from '../lib/api';
 
 export interface StoreImageAPI {
   id: string;
@@ -26,7 +27,7 @@ export function PromoOffersSlider() {
     async function fetchAdvertiseImages() {
       try {
         setLoading(true);
-        const response = await fetch('http://localhost:3000/api/admin/store-imgs?type=ADVERTISE_PHOTO');
+        const response = await fetch(`${API_BASE_URL}/api/admin/store-imgs?type=ADVERTISE_PHOTO`);
         const data = await response.json();
 
         if (data.success && Array.isArray(data.images)) {
