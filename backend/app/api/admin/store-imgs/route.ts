@@ -1,14 +1,14 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import jwt from "jsonwebtoken";
-import path from "path";
-import { uploadToSpaces, deleteFromSpaces } from "@/lib/spaces";
-import { StoreImageType } from "@prisma/client";
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import jwt from 'jsonwebtoken';
+import path from 'path';
+import { uploadToSpaces, deleteFromSpaces } from '@/lib/spaces';
+import { StoreImageType } from '@prisma/client';
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 export async function OPTIONS() {
@@ -26,16 +26,16 @@ export async function OPTIONS() {
 // =====================================================
 
 function verifyAnyToken(req: Request) {
-  const authHeader = req.headers.get("Authorization");
+  const authHeader = req.headers.get('Authorization');
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return {
-      error: "Unauthorized. Token missing.",
+      error: 'Unauthorized. Token missing.',
       status: 401,
     } as const;
   }
 
-  const token = authHeader.split(" ")[1];
+  const token = authHeader.split(' ')[1];
 
   try {
     const decoded = jwt.verify(
@@ -48,23 +48,23 @@ function verifyAnyToken(req: Request) {
     } as const;
   } catch {
     return {
-      error: "Invalid or expired token.",
+      error: 'Invalid or expired token.',
       status: 401,
     } as const;
   }
 }
 
 function verifyAdmin(req: Request) {
-  const authHeader = req.headers.get("Authorization");
+  const authHeader = req.headers.get('Authorization');
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return {
-      error: "Unauthorized. Token missing.",
+      error: 'Unauthorized. Token missing.',
       status: 401,
     } as const;
   }
 
-  const token = authHeader.split(" ")[1];
+  const token = authHeader.split(' ')[1];
 
   try {
     const decoded = jwt.verify(
@@ -75,9 +75,9 @@ function verifyAdmin(req: Request) {
       role: string;
     };
 
-    if (decoded.role !== "admin") {
+    if (decoded.role !== 'admin') {
       return {
-        error: "Forbidden. Admin access required.",
+        error: 'Forbidden. Admin access required.',
         status: 403,
       } as const;
     }
@@ -87,7 +87,7 @@ function verifyAdmin(req: Request) {
     };
   } catch {
     return {
-      error: "Invalid or expired token.",
+      error: 'Invalid or expired token.',
       status: 401,
     } as const;
   }
@@ -103,12 +103,6 @@ const VALID_TYPES: StoreImageType[] = [
   StoreImageType.ADVERTISE_PHOTO,
 ];
 
-/**
- * Maximum number of ACTIVE images allowed
- * for each image type PER STORE.
- *
- * Change these limits whenever required.
- */
 const CAPS: Record<StoreImageType, number> = {
   [StoreImageType.COVER_PHOTO]: 5,
   [StoreImageType.FIRST_PHOTO]: 5,
@@ -116,15 +110,15 @@ const CAPS: Record<StoreImageType, number> = {
 };
 
 const ALLOWED_MIME = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
+  'image/jpeg',
+  'image/png',
+  'image/webp',
 ];
 
-const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_BYTES = 5 * 1024 * 1024;
 
 // =====================================================
-// HELPER - VALIDATE TYPE
+// HELPERS
 // =====================================================
 
 function isValidStoreImageType(
@@ -137,33 +131,28 @@ function isValidStoreImageType(
 
 // =====================================================
 // GET
-// /api/admin/store-images
-//
-// Supported queries:
-//
-// ?type=COVER_PHOTO
-// ?storeAdminId=xxx
-// ?storeId=xxx
+// /api/admin/store-imgs
 //
 // Examples:
 //
-// /api/admin/store-images?storeId=xxx&type=COVER_PHOTO
+// /api/admin/store-imgs?type=COVER_PHOTO
 //
-// /api/admin/store-images?storeId=xxx&type=ADVERTISE_PHOTO
+// /api/admin/store-imgs?type=COVER_PHOTO&storeId=xxx
+//
+// /api/admin/store-imgs?storeAdminId=xxx
 //
 // =====================================================
 
 export async function GET(req: Request) {
   try {
-    // -------------------------------------------------
-    // Enable if GET should require authentication
-    // -------------------------------------------------
-
+    // Enable this if GET should require auth
+    //
     // const auth = verifyAnyToken(req);
-
-    // if ("error" in auth) {
+    //
+    // if ('error' in auth) {
     //   return NextResponse.json(
     //     {
+    //       success: false,
     //       error: auth.error,
     //     },
     //     {
@@ -175,36 +164,45 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
 
-    const type = searchParams.get("type");
+    const typeParam =
+      searchParams.get('type');
+
     const storeAdminId =
-      searchParams.get("storeAdminId");
-    const storeId = searchParams.get("storeId");
+      searchParams.get('storeAdminId');
 
-    // -------------------------------------------------
-    // Validate type if provided
-    // -------------------------------------------------
+    const storeId =
+      searchParams.get('storeId');
 
-    if (
-      type &&
-      !isValidStoreImageType(type)
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Invalid type. Must be one of: ${VALID_TYPES.join(
-            ", "
-          )}`,
-        },
-        {
-          status: 400,
-          headers: corsHeaders,
-        }
-      );
+    // ---------------------------------------------
+    // Validate and safely convert query type
+    // ---------------------------------------------
+
+    let type: StoreImageType | undefined;
+
+    if (typeParam) {
+      if (
+        !isValidStoreImageType(typeParam)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Invalid type. Must be one of: ${VALID_TYPES.join(
+              ', '
+            )}`,
+          },
+          {
+            status: 400,
+            headers: corsHeaders,
+          }
+        );
+      }
+
+      type = typeParam;
     }
 
-    // -------------------------------------------------
+    // ---------------------------------------------
     // Fetch images
-    // -------------------------------------------------
+    // ---------------------------------------------
 
     const images =
       await prisma.storeAdminImg.findMany({
@@ -230,13 +228,13 @@ export async function GET(req: Request) {
 
         orderBy: [
           {
-            type: "asc",
+            type: 'asc',
           },
           {
-            displayOrder: "asc",
+            displayOrder: 'asc',
           },
           {
-            createdAt: "desc",
+            createdAt: 'desc',
           },
         ],
       });
@@ -254,14 +252,14 @@ export async function GET(req: Request) {
     );
   } catch (error: any) {
     console.error(
-      "Fetch store images error:",
+      'Fetch store images error:',
       error
     );
 
     return NextResponse.json(
       {
         success: false,
-        error: "Internal server error",
+        error: 'Internal server error',
         details: error?.message,
       },
       {
@@ -274,36 +272,28 @@ export async function GET(req: Request) {
 
 // =====================================================
 // POST
-// /api/admin/store-images
+// /api/admin/store-imgs
 //
-// multipart/form-data
+// multipart/form-data:
 //
-// file          required
-// type          required
-// storeAdminId  required
-// storeId       optional
-// expiryDate    optional
-// displayOrder  optional
-//
-// Supports multiple images of:
-//
-// COVER_PHOTO
-// FIRST_PHOTO
-// ADVERTISE_PHOTO
-//
-// Limits are PER STORE.
+// file
+// type
+// storeAdminId
+// storeId
+// expiryDate
+// displayOrder
 //
 // =====================================================
 
 export async function POST(req: Request) {
   try {
     // =================================================
-    // AUTHENTICATION
+    // AUTH
     // =================================================
 
     const auth = verifyAdmin(req);
 
-    if ("error" in auth) {
+    if ('error' in auth) {
       return NextResponse.json(
         {
           success: false,
@@ -324,45 +314,45 @@ export async function POST(req: Request) {
       await req.formData();
 
     const file =
-      formData.get("file") as File | null;
+      formData.get('file') as File | null;
 
     const typeRaw =
-      formData.get("type");
+      formData.get('type');
 
     const storeAdminIdRaw =
-      formData.get("storeAdminId");
+      formData.get('storeAdminId');
 
     const storeIdRaw =
-      formData.get("storeId");
+      formData.get('storeId');
 
     const expiryDateRaw =
-      formData.get("expiryDate");
+      formData.get('expiryDate');
 
     const displayOrderRaw =
-      formData.get("displayOrder");
+      formData.get('displayOrder');
 
     const type =
-      typeof typeRaw === "string"
+      typeof typeRaw === 'string'
         ? typeRaw.trim()
         : null;
 
     const storeAdminId =
-      typeof storeAdminIdRaw === "string"
+      typeof storeAdminIdRaw === 'string'
         ? storeAdminIdRaw.trim()
         : null;
 
     const storeId =
-      typeof storeIdRaw === "string"
+      typeof storeIdRaw === 'string'
         ? storeIdRaw.trim()
         : null;
 
     const expiryDate =
-      typeof expiryDateRaw === "string"
+      typeof expiryDateRaw === 'string'
         ? expiryDateRaw.trim()
         : null;
 
     // =================================================
-    // BASIC VALIDATION
+    // REQUIRED FIELDS
     // =================================================
 
     if (
@@ -374,7 +364,7 @@ export async function POST(req: Request) {
         {
           success: false,
           error:
-            "file, type and storeAdminId are required.",
+            'file, type and storeAdminId are required.',
         },
         {
           status: 400,
@@ -387,12 +377,14 @@ export async function POST(req: Request) {
     // TYPE VALIDATION
     // =================================================
 
-    if (!isValidStoreImageType(type)) {
+    if (
+      !isValidStoreImageType(type)
+    ) {
       return NextResponse.json(
         {
           success: false,
           error: `Invalid type. Must be one of: ${VALID_TYPES.join(
-            ", "
+            ', '
           )}`,
         },
         {
@@ -402,18 +394,24 @@ export async function POST(req: Request) {
       );
     }
 
+    // From here onwards TypeScript knows:
+    //
+    // type = StoreImageType
+
     // =================================================
-    // FILE TYPE VALIDATION
+    // FILE TYPE
     // =================================================
 
     if (
-      !ALLOWED_MIME.includes(file.type)
+      !ALLOWED_MIME.includes(
+        file.type
+      )
     ) {
       return NextResponse.json(
         {
           success: false,
           error: `Invalid file type. Allowed: ${ALLOWED_MIME.join(
-            ", "
+            ', '
           )}`,
         },
         {
@@ -424,15 +422,17 @@ export async function POST(req: Request) {
     }
 
     // =================================================
-    // FILE SIZE VALIDATION
+    // FILE SIZE
     // =================================================
 
-    if (file.size > MAX_BYTES) {
+    if (
+      file.size > MAX_BYTES
+    ) {
       return NextResponse.json(
         {
           success: false,
           error:
-            "File too large. Maximum size is 5MB.",
+            'File too large. Maximum size is 5MB.',
         },
         {
           status: 400,
@@ -442,7 +442,7 @@ export async function POST(req: Request) {
     }
 
     // =================================================
-    // VALIDATE STORE ADMIN
+    // STORE ADMIN VALIDATION
     // =================================================
 
     const storeAdmin =
@@ -460,7 +460,8 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           success: false,
-          error: "Store admin not found.",
+          error:
+            'Store admin not found.',
         },
         {
           status: 404,
@@ -471,18 +472,13 @@ export async function POST(req: Request) {
 
     // =================================================
     // RESOLVE STORE
-    //
-    // IMPORTANT:
-    //
-    // Image limits now depend on STORE ID,
-    // not only storeAdminId.
     // =================================================
 
     let resolvedStoreId: string | null =
       null;
 
     // -------------------------------------------------
-    // Store explicitly sent by frontend
+    // Store ID explicitly sent
     // -------------------------------------------------
 
     if (storeId) {
@@ -503,7 +499,7 @@ export async function POST(req: Request) {
           {
             success: false,
             error:
-              "storeId does not belong to the given storeAdminId.",
+              'storeId does not belong to the given storeAdminId.',
           },
           {
             status: 400,
@@ -516,9 +512,7 @@ export async function POST(req: Request) {
     }
 
     // -------------------------------------------------
-    // No storeId sent
-    //
-    // Try resolving automatically.
+    // No storeId supplied
     // -------------------------------------------------
 
     else {
@@ -535,16 +529,14 @@ export async function POST(req: Request) {
           take: 2,
         });
 
-      // -----------------------------------------------
-      // No store
-      // -----------------------------------------------
-
-      if (stores.length === 0) {
+      if (
+        stores.length === 0
+      ) {
         return NextResponse.json(
           {
             success: false,
             error:
-              "No store found for this store admin.",
+              'No store found for this store admin.',
           },
           {
             status: 404,
@@ -553,27 +545,21 @@ export async function POST(req: Request) {
         );
       }
 
-      // -----------------------------------------------
-      // Exactly one store
-      // -----------------------------------------------
-
-      if (stores.length === 1) {
+      if (
+        stores.length === 1
+      ) {
         resolvedStoreId =
           stores[0].id;
       }
 
-      // -----------------------------------------------
-      // Multiple stores
-      //
-      // Frontend MUST tell us which store.
-      // -----------------------------------------------
-
-      if (stores.length > 1) {
+      if (
+        stores.length > 1
+      ) {
         return NextResponse.json(
           {
             success: false,
             error:
-              "This admin has multiple stores. storeId is required.",
+              'This admin has multiple stores. storeId is required.',
           },
           {
             status: 400,
@@ -583,16 +569,12 @@ export async function POST(req: Request) {
       }
     }
 
-    // =================================================
-    // SAFETY CHECK
-    // =================================================
-
     if (!resolvedStoreId) {
       return NextResponse.json(
         {
           success: false,
           error:
-            "Unable to resolve store.",
+            'Unable to resolve store.',
         },
         {
           status: 400,
@@ -602,40 +584,30 @@ export async function POST(req: Request) {
     }
 
     // =================================================
-    // COUNT EXISTING ACTIVE IMAGES
+    // ACTIVE IMAGE COUNT
     //
-    // IMPORTANT CHANGE:
-    //
-    // OLD:
-    //
-    // where: {
-    //   storeAdminId,
-    //   type,
-    // }
-    //
-    // NEW:
-    //
-    // where: {
-    //   storeId: resolvedStoreId,
-    //   type,
-    // }
-    //
-    // So each store gets its OWN image limits.
+    // IMPORTANT:
+    // Count is PER STORE + PER TYPE
     // =================================================
 
     const activeImageCount =
       await prisma.storeAdminImg.count({
         where: {
-          storeId: resolvedStoreId,
+          storeId:
+            resolvedStoreId,
+
           type,
+
           isActive: true,
         },
       });
 
-    const maxAllowed = CAPS[type];
+    const maxAllowed =
+      CAPS[type];
 
     if (
-      activeImageCount >= maxAllowed
+      activeImageCount >=
+      maxAllowed
     ) {
       return NextResponse.json(
         {
@@ -647,7 +619,8 @@ export async function POST(req: Request) {
 
           type,
 
-          storeId: resolvedStoreId,
+          storeId:
+            resolvedStoreId,
 
           currentCount:
             activeImageCount,
@@ -670,28 +643,25 @@ export async function POST(req: Request) {
 
     if (
       typeof displayOrderRaw ===
-        "string" &&
-      displayOrderRaw.trim() !== ""
+        'string' &&
+      displayOrderRaw.trim() !== ''
     ) {
-      const parsedDisplayOrder =
+      const parsed =
         Number.parseInt(
           displayOrderRaw,
           10
         );
 
       if (
-        Number.isFinite(
-          parsedDisplayOrder
-        ) &&
-        parsedDisplayOrder > 0
+        Number.isFinite(parsed) &&
+        parsed > 0
       ) {
-        displayOrder =
-          parsedDisplayOrder;
+        displayOrder = parsed;
       }
     }
 
     // =================================================
-    // EXPIRY DATE VALIDATION
+    // EXPIRY DATE
     // =================================================
 
     let parsedExpiryDate:
@@ -711,7 +681,7 @@ export async function POST(req: Request) {
           {
             success: false,
             error:
-              "Invalid expiryDate.",
+              'Invalid expiryDate.',
           },
           {
             status: 400,
@@ -722,48 +692,37 @@ export async function POST(req: Request) {
     }
 
     // =================================================
-    // CREATE DIGITALOCEAN KEY
+    // FILE EXTENSION
     // =================================================
 
-    const buffer = Buffer.from(
-      await file.arrayBuffer()
-    );
-
-    const originalExtension =
-      path.extname(file.name);
+    const buffer =
+      Buffer.from(
+        await file.arrayBuffer()
+      );
 
     let extension =
-      originalExtension;
+      path.extname(file.name);
 
     if (!extension) {
       if (
         file.type ===
-        "image/png"
+        'image/png'
       ) {
-        extension = ".png";
+        extension = '.png';
       } else if (
         file.type ===
-        "image/webp"
+        'image/webp'
       ) {
-        extension = ".webp";
+        extension = '.webp';
       } else {
-        extension = ".jpg";
+        extension = '.jpg';
       }
     }
 
-    /**
-     * Added STORE ID into path.
-     *
-     * Example:
-     *
-     * store-images/
-     *   admin-id/
-     *     store-id/
-     *       cover_photo/
-     *       advertise_photo/
-     *
-     * This makes files easier to organize.
-     */
+    // =================================================
+    // DIGITALOCEAN PATH
+    // =================================================
+
     const key =
       `store-images/` +
       `${storeAdminId}/` +
@@ -773,7 +732,7 @@ export async function POST(req: Request) {
       `${extension}`;
 
     // =================================================
-    // UPLOAD TO DIGITALOCEAN SPACES
+    // UPLOAD
     // =================================================
 
     let url: string;
@@ -787,7 +746,7 @@ export async function POST(req: Request) {
         );
     } catch (uploadError) {
       console.error(
-        "Spaces upload failed:",
+        'Spaces upload failed:',
         uploadError
       );
 
@@ -795,7 +754,7 @@ export async function POST(req: Request) {
         {
           success: false,
           error:
-            "Failed to upload image.",
+            'Failed to upload image.',
         },
         {
           status: 500,
@@ -805,16 +764,11 @@ export async function POST(req: Request) {
     }
 
     if (!url) {
-      console.error(
-        "uploadToSpaces returned no URL:",
-        key
-      );
-
       return NextResponse.json(
         {
           success: false,
           error:
-            "Upload succeeded but no URL was returned.",
+            'Upload succeeded but no URL was returned.',
         },
         {
           status: 500,
@@ -824,7 +778,7 @@ export async function POST(req: Request) {
     }
 
     // =================================================
-    // SAVE DATABASE RECORD
+    // CREATE DB RECORD
     // =================================================
 
     try {
@@ -849,10 +803,6 @@ export async function POST(req: Request) {
           },
         });
 
-      // =================================================
-      // SUCCESS
-      // =================================================
-
       return NextResponse.json(
         {
           success: true,
@@ -862,13 +812,13 @@ export async function POST(req: Request) {
 
           image,
 
-          store: {
-            id: resolvedStoreId,
-          },
+          storeId:
+            resolvedStoreId,
 
           limits: {
             current:
-              activeImageCount + 1,
+              activeImageCount +
+              1,
 
             maximum:
               maxAllowed,
@@ -888,11 +838,9 @@ export async function POST(req: Request) {
         }
       );
     } catch (dbError: any) {
-      // =================================================
-      // DATABASE FAILED
-      //
-      // Delete uploaded image from Spaces
-      // =================================================
+      // -----------------------------------------------
+      // DB failed, remove uploaded Spaces file
+      // -----------------------------------------------
 
       try {
         await deleteFromSpaces(
@@ -902,13 +850,13 @@ export async function POST(req: Request) {
         cleanupError
       ) {
         console.error(
-          "Failed cleaning uploaded Spaces file:",
+          'Failed to clean uploaded file:',
           cleanupError
         );
       }
 
       console.error(
-        "DB insert failed after upload:",
+        'DB insert failed after upload:',
         dbError
       );
 
@@ -916,7 +864,7 @@ export async function POST(req: Request) {
         {
           success: false,
           error:
-            "Failed to save image record.",
+            'Failed to save image record.',
           details:
             dbError?.message,
         },
@@ -928,17 +876,16 @@ export async function POST(req: Request) {
     }
   } catch (error: any) {
     console.error(
-      "Create store image error:",
+      'Create store image error:',
       error
     );
 
     return NextResponse.json(
       {
         success: false,
-
         error:
           error?.message ||
-          "Failed to add image.",
+          'Failed to add image.',
       },
       {
         status: 500,
