@@ -23,6 +23,8 @@ interface Enquiry {
   email: string;
   phone: string;
   productName: string;
+  productImage: string | null;
+  productCategory: string | null;
   message: string;
   date: string;
   status: DisplayStatus;
@@ -55,6 +57,8 @@ function mapApiEnquiry(e: ApiEnquiry): Enquiry {
     email: e.email,
     phone: e.phone || 'Not provided',
     productName: e.product?.name || 'Unknown product',
+    productImage: e.product?.images?.[0] || null,
+    productCategory: e.product?.category || null,
     message: e.message,
     date: formatDate(e.createdAt),
     status: STATUS_FROM_API[e.status] || 'New',
@@ -499,8 +503,93 @@ export function EnquiriesPage() {
                 </div>
               </div>
               <div style={{ backgroundColor: T.ivory, borderRadius: '12px', padding: '14px' }}>
-                <p style={{ fontSize: '11px', color: T.muted, marginBottom: '5px' }}>Product</p>
-                <p style={{ fontSize: '14px', fontWeight: 600, color: T.navy }}>{selectedEnquiry.productName}</p>
+                <p style={{ fontSize: '11px', color: T.muted, marginBottom: '10px' }}>Product</p>
+
+                <div className="flex flex-col sm:flex-row gap-md">
+                  <div
+                    style={{
+                      width: '100%',
+                      maxWidth: '170px',
+                      aspectRatio: '1 / 1',
+                      borderRadius: '12px',
+                      overflow: 'hidden',
+                      backgroundColor: '#ffffff',
+                      border: `1px solid ${T.ivoryShade}`,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {selectedEnquiry.productImage ? (
+                      <img
+                        src={selectedEnquiry.productImage}
+                        alt={selectedEnquiry.productName}
+                        loading="lazy"
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          display: 'block',
+                        }}
+                        onError={e => {
+                          e.currentTarget.style.display = 'none';
+                          const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        display: selectedEnquiry.productImage ? 'none' : 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: T.muted,
+                        fontSize: '12px',
+                        textAlign: 'center',
+                        padding: '16px',
+                      }}
+                    >
+                      No product image available
+                    </div>
+                  </div>
+
+                  <div
+                    className="flex flex-col justify-center"
+                    style={{ minWidth: 0 }}
+                  >
+                    <p
+                      style={{
+                        fontSize: '15px',
+                        fontWeight: 600,
+                        color: T.navy,
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {selectedEnquiry.productName}
+                    </p>
+
+                    {selectedEnquiry.productCategory && (
+                      <div style={{ marginTop: '8px' }}>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            padding: '5px 9px',
+                            borderRadius: '999px',
+                            backgroundColor: '#ffffff',
+                            border: `1px solid ${T.ivoryShade}`,
+                            color: T.muted,
+                          }}
+                        >
+                          {selectedEnquiry.productCategory}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
               <div style={{ backgroundColor: T.ivory, borderRadius: '12px', padding: '14px' }}>
                 <p style={{ fontSize: '11px', color: T.muted, marginBottom: '5px' }}>Message</p>
