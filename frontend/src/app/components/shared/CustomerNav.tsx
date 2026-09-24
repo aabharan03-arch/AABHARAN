@@ -4,7 +4,7 @@ import { Search, Menu, X, User, LogOut } from 'lucide-react';
 import { PRODUCTS, STORES, CATEGORIES } from '../data/mockData';
 
 // Import your logo from the assets folder. 
-import logo from '../asserts/logo.jpeg';
+import logo from '../asserts/logo3.png';
 
 interface SearchResult {
   type: 'product' | 'store' | 'category';
@@ -141,8 +141,9 @@ export function CustomerNav() {
             <Link to="/" className="flex items-center flex-shrink-0 transition-opacity hover:opacity-80">
               <img
                 src={logo}
+              
                 alt="Aabharan Logo"
-                className="h-15 w-15 rounded-full object-cover"
+                className="h-17 w-22 l object-cover"
               />
             </Link>
 

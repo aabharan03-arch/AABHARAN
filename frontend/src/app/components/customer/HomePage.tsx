@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 
-import { HERO_SLIDES, PROMOTIONAL_BANNERS } from '../data/mockData';
+import { HERO_SLIDES } from '../data/mockData';
 import { EnquiryModal } from '../shared/EnquiryModal';
 import { PromoPopup } from './Promopopup ';
 
@@ -19,6 +19,8 @@ const PRODUCTS_CACHE_KEY = 'aabharan_products_cache';
 const CACHE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes cache duration
 
 const COVER_PHOTOS_API = `${API_BASE_URL}/api/admin/store-imgs?type=COVER_PHOTO`;
+const METAL_RATES_API = 'https://suvarnagold-16e5.vercel.app/api/rates';
+const RATES_REFRESH_MS = 5 * 60 * 1000; // refresh live rates every 5 minutes
 
 interface CoverPhotoApiItem {
   id: string;
@@ -39,6 +41,16 @@ interface HeroSlide {
   cta: string;
   storeId: string | null;
   fromApi: boolean;
+}
+
+interface MetalRates {
+  gold22: string;
+  gold24: string;
+  gold18: string;
+  silver: string;
+  source?: string;
+  updatedAt?: string;
+  cached?: boolean;
 }
 
 const getDummyHeroSlides = (): HeroSlide[] =>
@@ -79,7 +91,6 @@ export function HomePage() {
   const [heroSlides, setHeroSlides] = useState<HeroSlide[]>(getDummyHeroSlides());
   const [isLoadingCoverPhotos, setIsLoadingCoverPhotos] = useState(true);
 
-  const [bannerIndex, setBannerIndex] = useState(0);
   const [enquiryProduct, setEnquiryProduct] = useState<Product | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('All');
 
@@ -90,6 +101,51 @@ export function HomePage() {
   // API State - Products
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState<boolean>(true);
+
+  // API State - Live Metal Rates
+  const [metalRates, setMetalRates] = useState<MetalRates | null>(null);
+  const [isLoadingRates, setIsLoadingRates] = useState<boolean>(true);
+
+  // Fetch live gold and silver rates shown in the fixed top strip.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchMetalRates() {
+      try {
+        const response = await fetch(METAL_RATES_API, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+          },
+          cache: 'no-store',
+        });
+
+        if (!response.ok) {
+          throw new Error(`Rates API returned ${response.status}`);
+        }
+
+        const json: MetalRates = await response.json();
+
+        if (!cancelled) {
+          setMetalRates(json);
+        }
+      } catch (error) {
+        console.error('❌ [RATES] Failed to fetch live metal rates:', error);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingRates(false);
+        }
+      }
+    }
+
+    fetchMetalRates();
+    const refreshTimer = window.setInterval(fetchMetalRates, RATES_REFRESH_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshTimer);
+    };
+  }, []);
 
   // Fetch COVER_PHOTO images for the home hero.
   //
@@ -312,11 +368,6 @@ export function HomePage() {
     return () => clearInterval(t);
   }, [heroSlides.length]);
 
-  useEffect(() => {
-    const t = setInterval(() => setBannerIndex((i) => (i + 1) % PROMOTIONAL_BANNERS.length), 4000);
-    return () => clearInterval(t);
-  }, []);
-
   return (
     <div className="bg-[#f9f7ee] min-h-screen" style={{ fontFamily: 'var(--font-family-sans)' }}>
       {/* Promotional Popup */}
@@ -331,29 +382,38 @@ export function HomePage() {
         ctaLink="/products"
       />
 
-      {/* Top Banner Carousel */}
-      <div className="relative overflow-hidden h-14 bg-[#04091e] shadow-sm">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={bannerIndex}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.4 }}
-            className="absolute inset-0 flex items-center justify-center gap-lg px-xl"
-          >
-            <span className="text-label-sm text-white font-medium tracking-wide">
-              {PROMOTIONAL_BANNERS[bannerIndex].title}
-            </span>
-            <span className="text-video-title text-white/70">·</span>
-            <span className="text-label-sm text-white/90">
-              {PROMOTIONAL_BANNERS[bannerIndex].subtitle}
-            </span>
-            <button className="ml-md text-video-title text-white font-medium underline hover:text-gray-300 transition-colors cursor-pointer">
-              {PROMOTIONAL_BANNERS[bannerIndex].cta}
-            </button>
-          </motion.div>
-        </AnimatePresence>
+      {/* Live Metal Rates - sits directly below the fixed site header */}
+      <div className="sticky top-[75px] z-[40] w-full border-b border-[#d6b85f]/30 bg-[#04091e]/95 shadow-md backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center gap-2 overflow-x-auto px-3 py-2.5 sm:justify-center sm:gap-3 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="shrink-0 pr-1 sm:pr-2">
+            <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#d6b85f] sm:text-[10px]">
+              Live Metal Rates
+            </div>
+            <div className="mt-0.5 text-[9px] text-white/50 sm:text-[10px]">
+              Per gram
+            </div>
+          </div>
+
+          {[
+            { label: 'Gold 24K', value: metalRates?.gold24 },
+            { label: 'Gold 22K', value: metalRates?.gold22 },
+            { label: 'Gold 18K', value: metalRates?.gold18 },
+            { label: 'Silver', value: metalRates?.silver },
+          ].map((rate) => (
+            <div
+              key={rate.label}
+              className="flex min-w-[112px] shrink-0 items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 sm:min-w-[126px]"
+            >
+              <span className="whitespace-nowrap text-[10px] font-medium text-white/65 sm:text-xs">
+                {rate.label}
+              </span>
+              <span className="whitespace-nowrap text-xs font-bold text-[#f4d675] sm:text-sm">
+                {isLoadingRates && !metalRates ? 'Loading…' : rate.value ?? '—'}
+              </span>
+            </div>
+          ))}
+
+        </div>
       </div>
 
       {/* Hero Slider */}
