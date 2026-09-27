@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 
 import { Mail, Phone, MapPin, Clock, Send, CheckCircle2 } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL = import.meta.env.NEXT_PUBLIC_APP_URL;
 
 
 export function ContactPage() {
