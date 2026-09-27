@@ -105,6 +105,7 @@ model Customer {
   id        String   @id @default(uuid())
   email     String   @unique
   password  String
+  phone     String   @default("8555025407")
   name      String?
   wishlist WishlistItem[]
 

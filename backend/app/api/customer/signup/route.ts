@@ -5,10 +5,9 @@ import bcrypt from 'bcryptjs';
 function getCorsHeaders(origin: string | null) {
   const allowedOrigins = [
     'http://localhost:5173',
-    'https://aabharan03.vercel.app', 
+    'https://aabharan03.vercel.app',
     'https://www.aabharan.in',
     'https://aabharan.in',
-    // add your prod frontend domain(s)
   ];
 
   const isAllowed = origin && allowedOrigins.includes(origin);
@@ -18,13 +17,17 @@ function getCorsHeaders(origin: string | null) {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Credentials': 'true',
-    'Vary': 'Origin',
+    Vary: 'Origin',
   };
 }
 
 export async function OPTIONS(request: Request) {
   const origin = request.headers.get('origin');
-  return NextResponse.json({}, { headers: getCorsHeaders(origin) });
+
+  return new NextResponse(null, {
+    status: 204,
+    headers: getCorsHeaders(origin),
+  });
 }
 
 export async function POST(request: Request) {
@@ -32,30 +35,122 @@ export async function POST(request: Request) {
   const corsHeaders = getCorsHeaders(origin);
 
   try {
-    const { email, password, name } = await request.json();
+    const body = await request.json();
 
-    const existingUser = await prisma.customer.findUnique({ where: { email } });
-    if (existingUser) {
+    const name = body.name?.trim();
+    const email = body.email?.trim().toLowerCase();
+    const phone = body.phone?.trim();
+    const password = body.password;
+
+    // -----------------------------
+    // Basic validation
+    // -----------------------------
+    if (!name || !email || !phone || !password) {
       return NextResponse.json(
-        { error: 'User already exists' },
-        { status: 400, headers: corsHeaders }
+        {
+          error: 'Name, email, phone number and password are required',
+        },
+        {
+          status: 400,
+          headers: corsHeaders,
+        }
       );
     }
 
+    // Indian 10 digit mobile validation
+    const phoneRegex = /^[6-9]\d{9}$/;
+
+    if (!phoneRegex.test(phone)) {
+      return NextResponse.json(
+        {
+          error: 'Please enter a valid 10 digit mobile number',
+        },
+        {
+          status: 400,
+          headers: corsHeaders,
+        }
+      );
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json(
+        {
+          error: 'Password must contain at least 6 characters',
+        },
+        {
+          status: 400,
+          headers: corsHeaders,
+        }
+      );
+    }
+
+    // -----------------------------
+    // Check existing email
+    // -----------------------------
+    const existingUser = await prisma.customer.findUnique({
+      where: {
+        email,
+      },
+    });
+
+    if (existingUser) {
+      return NextResponse.json(
+        {
+          error: 'An account already exists with this email',
+        },
+        {
+          status: 400,
+          headers: corsHeaders,
+        }
+      );
+    }
+
+    // -----------------------------
+    // Hash password
+    // -----------------------------
     const hashedPassword = await bcrypt.hash(password, 10);
-    await prisma.customer.create({
-      data: { email, password: hashedPassword, name },
+
+    // -----------------------------
+    // Create customer
+    // -----------------------------
+    const customer = await prisma.customer.create({
+      data: {
+        name,
+        email,
+        phone,
+        password: hashedPassword,
+      },
+
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        createdAt: true,
+      },
     });
 
     return NextResponse.json(
-      { message: 'User created successfully' },
-      { status: 201, headers: corsHeaders }
+      {
+        message: 'User created successfully',
+        user: customer,
+      },
+      {
+        status: 201,
+        headers: corsHeaders,
+      }
     );
   } catch (error) {
-    console.error("SIGNUP ROUTE ERROR:", error);
+    console.error('SIGNUP ROUTE ERROR:', error);
+
     return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500, headers: corsHeaders }
+      {
+        error: 'Internal Server Error',
+      },
+      {
+        status: 500,
+        headers: corsHeaders,
+      }
     );
   }
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Search, Mail, Calendar, X, Loader2, AlertCircle } from 'lucide-react';
 import { API_BASE_URL } from '../../lib/api';
 
@@ -27,6 +27,7 @@ interface Enquiry {
   productCategory: string | null;
   message: string;
   date: string;
+  createdAt: string;
   status: DisplayStatus;
 }
 
@@ -61,6 +62,7 @@ function mapApiEnquiry(e: ApiEnquiry): Enquiry {
     productCategory: e.product?.category || null,
     message: e.message,
     date: formatDate(e.createdAt),
+    createdAt: e.createdAt,
     status: STATUS_FROM_API[e.status] || 'New',
   };
 }
@@ -81,6 +83,419 @@ const T = {
   goldSoft: '#e4d6ab',
   muted: '#6b6b5f',
 };
+
+
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const;
+
+function EnquiryTrendChart({ enquiries }: { enquiries: Enquiry[] }) {
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  const availableYears = useMemo(() => {
+    const years = new Set<number>([now.getFullYear()]);
+
+    enquiries.forEach(enquiry => {
+      const date = new Date(enquiry.createdAt);
+      if (!Number.isNaN(date.getTime())) years.add(date.getFullYear());
+    });
+
+    return Array.from(years).sort((a, b) => b - a);
+  }, [enquiries]);
+
+  const chartData = useMemo(() => {
+    const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    const counts = Array.from({ length: daysInMonth }, (_, index) => ({
+      day: index + 1,
+      count: 0,
+    }));
+
+    enquiries.forEach(enquiry => {
+      const date = new Date(enquiry.createdAt);
+      if (
+        !Number.isNaN(date.getTime()) &&
+        date.getFullYear() === selectedYear &&
+        date.getMonth() === selectedMonth
+      ) {
+        counts[date.getDate() - 1].count += 1;
+      }
+    });
+
+    return counts;
+  }, [enquiries, selectedMonth, selectedYear]);
+
+  const totalEnquiries = useMemo(
+    () => chartData.reduce((sum, item) => sum + item.count, 0),
+    [chartData],
+  );
+
+  const maxCount = Math.max(...chartData.map(item => item.count), 0);
+  const yMax =
+    maxCount <= 4
+      ? 4
+      : Math.ceil(maxCount / 4) * 4;
+
+  const width = 1000;
+  const height = 320;
+  const padding = { left: 58, right: 22, top: 20, bottom: 42 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const baselineY = padding.top + plotHeight;
+
+  const points = chartData.map((item, index) => ({
+    ...item,
+    x:
+      padding.left +
+      (chartData.length <= 1
+        ? 0
+        : (index / (chartData.length - 1)) * plotWidth),
+    y: padding.top + plotHeight - (item.count / yMax) * plotHeight,
+  }));
+
+  const linePath = points.reduce((path, point, index) => {
+    if (index === 0) return `M ${point.x} ${point.y}`;
+
+    const previous = points[index - 1];
+    const midX = (previous.x + point.x) / 2;
+
+    return `${path} C ${midX} ${previous.y}, ${midX} ${point.y}, ${point.x} ${point.y}`;
+  }, '');
+
+  const areaPath =
+    points.length > 0
+      ? `${linePath} L ${points[points.length - 1].x} ${baselineY} L ${points[0].x} ${baselineY} Z`
+      : '';
+
+  const yTicks = [0, 1, 2, 3, 4].map(step => (yMax / 4) * step);
+  const visibleDayLabels = new Set<number>([
+    1,
+    5,
+    10,
+    15,
+    20,
+    25,
+    30,
+    chartData.length,
+  ]);
+
+  const hoveredPoint =
+    hoveredIndex !== null ? points[hoveredIndex] : null;
+
+  const tooltipWidth = 150;
+  const tooltipHeight = 68;
+  const tooltipX = hoveredPoint
+    ? Math.min(
+        width - padding.right - tooltipWidth,
+        Math.max(padding.left, hoveredPoint.x - tooltipWidth / 2),
+      )
+    : 0;
+  const tooltipY = hoveredPoint
+    ? Math.max(padding.top + 4, hoveredPoint.y - tooltipHeight - 14)
+    : 0;
+
+  return (
+    <div
+      style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '24px',
+        border: '1px solid #e5e7eb',
+        padding: '20px 22px 18px',
+        boxShadow: '0 2px 8px rgba(4, 9, 30, 0.03)',
+      }}
+    >
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        <div>
+          <p
+            style={{
+              color: T.muted,
+              fontSize: '11px',
+              letterSpacing: '0.16em',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+            }}
+          >
+            Enquiry Trend
+          </p>
+
+          <div className="flex items-end gap-2" style={{ marginTop: '8px' }}>
+            <span
+              style={{
+                fontFamily: 'Fraunces, serif',
+                fontSize: '28px',
+                lineHeight: 1,
+                color: T.navy,
+                fontWeight: 500,
+              }}
+            >
+              {totalEnquiries}
+            </span>
+            <span style={{ color: T.muted, fontSize: '13px', paddingBottom: '2px' }}>
+              {totalEnquiries === 1 ? 'enquiry' : 'enquiries'}
+            </span>
+          </div>
+
+          <p style={{ color: T.muted, fontSize: '12.5px', marginTop: '7px' }}>
+            {MONTHS[selectedMonth]} {selectedYear} · daily enquiry count
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={selectedMonth}
+            onChange={event => {
+              setSelectedMonth(Number(event.target.value));
+              setHoveredIndex(null);
+            }}
+            aria-label="Select month"
+            style={{
+              height: '42px',
+              minWidth: '138px',
+              borderRadius: '11px',
+              border: `1px solid ${T.ivoryShade}`,
+              backgroundColor: T.ivory,
+              color: T.navy,
+              fontSize: '13px',
+              fontWeight: 500,
+              padding: '0 36px 0 13px',
+              outline: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            {MONTHS.map((month, index) => (
+              <option key={month} value={index}>
+                {month}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedYear}
+            onChange={event => {
+              setSelectedYear(Number(event.target.value));
+              setHoveredIndex(null);
+            }}
+            aria-label="Select year"
+            style={{
+              height: '42px',
+              minWidth: '104px',
+              borderRadius: '11px',
+              border: `1px solid ${T.ivoryShade}`,
+              backgroundColor: T.ivory,
+              color: T.navy,
+              fontSize: '13px',
+              fontWeight: 500,
+              padding: '0 36px 0 13px',
+              outline: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            {availableYears.map(year => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '18px', width: '100%', overflowX: 'auto' }}>
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label={`Daily enquiry trend for ${MONTHS[selectedMonth]} ${selectedYear}`}
+          style={{
+            display: 'block',
+            width: '100%',
+            minWidth: '720px',
+            height: 'auto',
+            overflow: 'visible',
+          }}
+          onMouseLeave={() => setHoveredIndex(null)}
+        >
+          <defs>
+            <linearGradient id="enquiryTrendFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={T.gold} stopOpacity="0.28" />
+              <stop offset="100%" stopColor={T.gold} stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+
+          {yTicks.map(tick => {
+            const y = padding.top + plotHeight - (tick / yMax) * plotHeight;
+
+            return (
+              <g key={tick}>
+                <line
+                  x1={padding.left}
+                  y1={y}
+                  x2={width - padding.right}
+                  y2={y}
+                  stroke="#e7e4dc"
+                  strokeWidth="1"
+                />
+                <text
+                  x={padding.left - 12}
+                  y={y + 4}
+                  textAnchor="end"
+                  fill="#6b7280"
+                  fontSize="12"
+                  fontFamily="Inter, sans-serif"
+                >
+                  {Math.round(tick)}
+                </text>
+              </g>
+            );
+          })}
+
+          <line
+            x1={padding.left}
+            y1={padding.top}
+            x2={padding.left}
+            y2={baselineY}
+            stroke="#d3d0c8"
+            strokeWidth="1"
+          />
+
+          <line
+            x1={padding.left}
+            y1={baselineY}
+            x2={width - padding.right}
+            y2={baselineY}
+            stroke="#d3d0c8"
+            strokeWidth="1"
+          />
+
+          {points.map(point =>
+            visibleDayLabels.has(point.day) ? (
+              <text
+                key={`day-${point.day}`}
+                x={point.x}
+                y={baselineY + 24}
+                textAnchor="middle"
+                fill="#6b7280"
+                fontSize="12"
+                fontFamily="Inter, sans-serif"
+              >
+                {point.day}
+              </text>
+            ) : null,
+          )}
+
+          {areaPath && <path d={areaPath} fill="url(#enquiryTrendFill)" />}
+
+          {linePath && (
+            <path
+              d={linePath}
+              fill="none"
+              stroke={T.gold}
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
+          {points.map((point, index) => (
+            <g key={`point-${point.day}`}>
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r="14"
+                fill="transparent"
+                style={{ cursor: 'crosshair' }}
+                onMouseEnter={() => setHoveredIndex(index)}
+              />
+              {(point.count > 0 || hoveredIndex === index) && (
+                <circle
+                  cx={point.x}
+                  cy={point.y}
+                  r={hoveredIndex === index ? 5 : 3.5}
+                  fill="#ffffff"
+                  stroke={T.gold}
+                  strokeWidth="2.5"
+                  pointerEvents="none"
+                />
+              )}
+            </g>
+          ))}
+
+          {hoveredPoint && (
+            <g pointerEvents="none">
+              <line
+                x1={hoveredPoint.x}
+                y1={hoveredPoint.y}
+                x2={hoveredPoint.x}
+                y2={baselineY}
+                stroke={T.goldSoft}
+                strokeDasharray="4 4"
+              />
+
+              <rect
+                x={tooltipX}
+                y={tooltipY}
+                width={tooltipWidth}
+                height={tooltipHeight}
+                rx="12"
+                fill="#ffffff"
+                stroke="#e5e7eb"
+              />
+
+              <text
+                x={tooltipX + 14}
+                y={tooltipY + 24}
+                fill={T.navy}
+                fontSize="12"
+                fontWeight="600"
+                fontFamily="Inter, sans-serif"
+              >
+                {MONTHS[selectedMonth].slice(0, 3)} {hoveredPoint.day}
+              </text>
+
+              <text
+                x={tooltipX + 14}
+                y={tooltipY + 47}
+                fill={T.gold}
+                fontSize="12"
+                fontWeight="600"
+                fontFamily="Inter, sans-serif"
+              >
+                enquiries: {hoveredPoint.count}
+              </text>
+            </g>
+          )}
+        </svg>
+
+        <div
+          className="flex items-center justify-center gap-2"
+          style={{ marginTop: '-2px', color: T.muted, fontSize: '11.5px' }}
+        >
+          <span
+            style={{
+              width: '18px',
+              height: '3px',
+              borderRadius: '999px',
+              backgroundColor: T.gold,
+              display: 'inline-block',
+            }}
+          />
+          Daily enquiries
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function EnquiriesPage() {
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
@@ -190,6 +605,9 @@ export function EnquiriesPage() {
           {filtered.length} enquiry{filtered.length !== 1 ? 'ies' : 'y'} · {enquiries.filter(e => e.status === 'New').length} new
         </p>
       </div>
+
+      {/* Enquiry trend graph */}
+      {!isLoading && !error && <EnquiryTrendChart enquiries={enquiries} />}
 
       {/* Filters */}
       <div
