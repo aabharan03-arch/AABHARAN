@@ -14,7 +14,7 @@ import logo from '../asserts/logo.jpeg';
 
 
 
-const API_BASE_URL = 'http://localhost:3000'; // ✅ Direct backend URL
+const API_BASE_URL = 'https://aabharan.vercel.app'; // ✅ Direct backend URL
 
 
 
