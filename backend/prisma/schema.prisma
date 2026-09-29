@@ -252,7 +252,7 @@ enum PaymentStatus {
   PAID
   PENDING
   FAILED
-  REFUN
+  REFUNDED
 }
 
 enum PaymentMethod {
@@ -266,25 +266,30 @@ enum PaymentMethod {
 
 model Payment {
   id           String        @id @default(uuid())
-  invoiceNo    String        @unique                  // e.g. INV-2025-0001
-  txnRef       String?                                // transaction reference / UTR / cheque.
+  invoiceNo    String        @unique
 
   storeAdminId String
   storeAdmin   StoreAdmin    @relation(fields: [storeAdminId], references: [id], onDelete: Cascade)
 
   planId       String?
   plan         Plan?         @relation(fields: [planId], references: [id])
-  planName     String                                 // snapshot of plan name at payment time
+  planName     String
 
+  // Kept for backward compatibility with old payment rows.
+  // For a single-method payment these mirror that method/ref.
+  // For a split payment method is OTHER and the actual values live in paymentBreakdown.
   method       PaymentMethod @default(UPI)
+  txnRef       String?
+
   amount       Float
   discount     Float         @default(0)
   status       PaymentStatus @default(PAID)
   collectedBy  String        @default("Admin")
   notes        String?
 
-  paidAt       DateTime      @default(now())          // the payment date shown in the table
+  paymentBreakdown PaymentBreakdown[]
 
+  paidAt       DateTime      @default(now())
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -292,6 +297,22 @@ model Payment {
   @@index([status])
   @@index([paidAt])
 }
+
+model PaymentBreakdown {
+  id        String        @id @default(uuid())
+  paymentId String
+  payment   Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  method    PaymentMethod
+  amount    Float
+  txnRef    String?
+
+  createdAt DateTime      @default(now())
+
+  @@index([paymentId])
+  @@index([method])
+}
+
 enum StoreImageType {
   COVER_PHOTO
   FIRST_PHOTO
