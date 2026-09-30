@@ -1,42 +1,29 @@
-// app/api/notify-plan-expired/route.ts
+// app/api/admin/send/route.ts
 
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import jwt from "jsonwebtoken";
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:8080",
-  "https://aabharan03.vercel.app",
-  "https://www.aabharan.in",
-  "https://aabharan.in",
-];
-
 // ---------------------------------------------------------
-// CORS HEADERS
+// PUBLIC CORS HEADERS
+// Any origin can call this API.
+// JWT authentication still protects the POST action.
 // ---------------------------------------------------------
 
-function getCorsHeaders(origin: string | null) {
-  const isAllowed = !!origin && allowedOrigins.includes(origin);
-
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    Vary: "Origin",
-  };
-}
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
 
 // ---------------------------------------------------------
-// OPTIONS
+// OPTIONS / PREFLIGHT
 // ---------------------------------------------------------
 
-export async function OPTIONS(request: Request) {
-  const origin = request.headers.get("origin");
-
+export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
-    headers: getCorsHeaders(origin),
+    headers: corsHeaders,
   });
 }
 
@@ -100,30 +87,9 @@ function verifyAdminToken(request: Request) {
 // ---------------------------------------------------------
 
 export async function POST(request: Request) {
-  const origin = request.headers.get("origin");
-
-  const corsHeaders = getCorsHeaders(origin);
-
   try {
     // -----------------------------------------------------
-    // 1. CHECK ORIGIN
-    // -----------------------------------------------------
-
-    if (!origin || !allowedOrigins.includes(origin)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Origin not allowed.",
-        },
-        {
-          status: 403,
-          headers: corsHeaders,
-        }
-      );
-    }
-
-    // -----------------------------------------------------
-    // 2. VERIFY ADMIN TOKEN
+    // 1. VERIFY ADMIN TOKEN
     // -----------------------------------------------------
 
     const admin = verifyAdminToken(request);
@@ -144,7 +110,7 @@ export async function POST(request: Request) {
     console.log("AUTHORIZED ADMIN:", admin);
 
     // -----------------------------------------------------
-    // 3. READ REQUEST BODY
+    // 2. READ REQUEST BODY
     // -----------------------------------------------------
 
     const body = await request.json();
@@ -160,7 +126,7 @@ export async function POST(request: Request) {
     const expiryDate = String(body?.expiryDate || "").trim();
 
     // -----------------------------------------------------
-    // 4. VALIDATE REQUIRED DATA
+    // 3. VALIDATE REQUIRED DATA
     // -----------------------------------------------------
 
     if (!storeName || !email) {
@@ -177,7 +143,7 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------------------
-    // 5. VALIDATE EMAIL
+    // 4. VALIDATE EMAIL
     // -----------------------------------------------------
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -196,7 +162,7 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------------------
-    // 6. INPUT LENGTH VALIDATION
+    // 5. INPUT LENGTH VALIDATION
     // -----------------------------------------------------
 
     if (
@@ -217,7 +183,7 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------------------
-    // 7. EMAIL ENVIRONMENT VARIABLES
+    // 6. EMAIL ENVIRONMENT VARIABLES
     // -----------------------------------------------------
 
     const emailUser = process.env.EMAIL_USER?.trim();
@@ -247,7 +213,7 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------------------
-    // 8. CREATE EMAIL TRANSPORTER
+    // 7. CREATE EMAIL TRANSPORTER
     // -----------------------------------------------------
 
     const transporter = nodemailer.createTransport({
@@ -260,7 +226,7 @@ export async function POST(request: Request) {
     });
 
     // -----------------------------------------------------
-    // 9. PREPARE PLAN DATA
+    // 8. PREPARE PLAN DATA
     // -----------------------------------------------------
 
     const planLabel =
@@ -274,7 +240,7 @@ export async function POST(request: Request) {
         : "";
 
     // -----------------------------------------------------
-    // 10. TEXT EMAIL
+    // 9. TEXT EMAIL
     // -----------------------------------------------------
 
     const text = [
@@ -294,7 +260,7 @@ export async function POST(request: Request) {
     ].join("\n");
 
     // -----------------------------------------------------
-    // 11. HTML EMAIL
+    // 10. HTML EMAIL
     // -----------------------------------------------------
 
     const html = `
@@ -415,11 +381,11 @@ export async function POST(request: Request) {
             ${
               supportPhone
                 ? `
-                  <div>
-                    Phone:
-                    ${escapeHtml(supportPhone)}
-                  </div>
-                `
+                    <div>
+                      Phone:
+                      ${escapeHtml(supportPhone)}
+                    </div>
+                  `
                 : ""
             }
           </div>
@@ -441,7 +407,7 @@ export async function POST(request: Request) {
     `;
 
     // -----------------------------------------------------
-    // 12. SEND EMAIL
+    // 11. SEND EMAIL
     // -----------------------------------------------------
 
     await transporter.sendMail({
@@ -460,7 +426,7 @@ export async function POST(request: Request) {
     });
 
     // -----------------------------------------------------
-    // 13. SUCCESS RESPONSE
+    // 12. SUCCESS RESPONSE
     // -----------------------------------------------------
 
     return NextResponse.json(
