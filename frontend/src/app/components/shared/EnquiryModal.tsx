@@ -55,6 +55,7 @@ export function EnquiryModal({ product, isOpen, onClose }: Props) {
           email: form.email.trim(),
           phone: form.phone.trim(),
           message: form.message.trim() || 'No message provided.',
+          productId: product.id,
         }),
       });
 

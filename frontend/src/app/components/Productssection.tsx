@@ -1,176 +1,338 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Star, Heart, Eye, Sparkles, ChevronDown, Check } from 'lucide-react';
+
+import {
+  Filter,
+  Star,
+  Heart,
+  Eye,
+  Sparkles,
+  ChevronDown,
+  Check,
+  MessageCircle,
+} from 'lucide-react';
 
 export interface Product {
   id: string | number;
+
   name: string;
+
   category: string;
+
   description?: string;
+
   metalType?: string;
+
   storeName?: string;
+
   images?: string[];
+
   featured?: boolean;
+
   rating?: number;
+
   reviewsCount?: number;
+
   price?: number;
+
   originalPrice?: number;
+
   discountPercentage?: number;
+
+  // Total enquiry count for this product
+  enquriycount?: number;
 }
 
 interface ProductSectionProps {
   products: Product[];
+
   isLoading: boolean;
+
   selectedCategory: string;
+
   selectedMetal?: string;
+
   onCategoryChange: (category: string) => void;
+
   onMetalChange?: (metal: string) => void;
+
   onEnquire: (product: Product) => void;
 }
 
 import { API_BASE_URL } from '../lib/api';
 
-const CATEGORIES_LIST = ['All', 'Rings', 'Necklaces', 'Earrings', 'Bracelets', 'Bangles'];
+const CATEGORIES_LIST = [
+  'All',
+  'Rings',
+  'Necklaces',
+  'Earrings',
+  'Bracelets',
+  'Bangles',
+];
+
 const METALS_LIST = ['All Metals', 'Gold', 'Silver', 'Diamond'];
 
 // ---- Wishlist API helpers ----
+
 // Assumes a customer JWT is stored under 'customerToken' after login.
+
 // Adjust the storage key/mechanism to match however your auth flow stores it.
+
 function authHeaders(): Record<string, string> {
   const token =
-    typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}  
+    typeof window !== 'undefined'
+      ? localStorage.getItem('token')
+      : null;
+
+  return token
+    ? {
+        Authorization: `Bearer ${token}`,
+      }
+    : {};
+}
 
 async function fetchWishlistIds(): Promise<string[]> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/customer/wishlist`, {
-      headers: { ...authHeaders() },
-    });
+    const res = await fetch(
+      `${API_BASE_URL}/api/customer/wishlist`,
+      {
+        headers: {
+          ...authHeaders(),
+        },
+      }
+    );
+
     if (!res.ok) return [];
+
     const data = await res.json();
+
     return (data.productIds ?? []) as string[];
   } catch {
     return [];
   }
 }
 
-async function toggleWishlist(productId: string | number): Promise<boolean> {
-  const res = await fetch(`${API_BASE_URL}/api/customer/wishlist/toggle`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ productId: String(productId) }),
-  });
+async function toggleWishlist(
+  productId: string | number
+): Promise<boolean> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/customer/wishlist/toggle`,
+    {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+
+      body: JSON.stringify({
+        productId: String(productId),
+      }),
+    }
+  );
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `Failed to update wishlist (${res.status})`);
+
+    throw new Error(
+      body.error ??
+        `Failed to update wishlist (${res.status})`
+    );
   }
+
   const data = await res.json();
+
   return data.liked as boolean;
 }
+
 // --------------------------------
 
 export function ProductSection({
   products = [],
+
   isLoading = false,
+
   selectedCategory = 'All',
+
   selectedMetal: externalMetal,
+
   onCategoryChange,
+
   onMetalChange,
+
   onEnquire,
 }: ProductSectionProps) {
-  const [internalMetal, setInternalMetal] = useState('All Metals');
-  const activeMetal = externalMetal !== undefined ? externalMetal : internalMetal;
+  const [internalMetal, setInternalMetal] =
+    useState('All Metals');
+
+  const activeMetal =
+    externalMetal !== undefined
+      ? externalMetal
+      : internalMetal;
 
   // Dropdown Open States
-  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
-  const [isMetalOpen, setIsMetalOpen] = useState(false);
+
+  const [isCategoryOpen, setIsCategoryOpen] =
+    useState(false);
+
+  const [isMetalOpen, setIsMetalOpen] =
+    useState(false);
 
   // Wishlist state — lifted here so it's fetched once, not per-card,
-  // and so the Like Products page (elsewhere) stays in sync on next fetch.
-  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
-  const [wishlistLoaded, setWishlistLoaded] = useState(false);
 
-  const categoryRef = useRef<HTMLDivElement>(null);
-  const metalRef = useRef<HTMLDivElement>(null);
+  // and so the Like Products page (elsewhere) stays in sync on next fetch.
+
+  const [likedIds, setLikedIds] = useState<
+    Set<string>
+  >(new Set());
+
+  const [wishlistLoaded, setWishlistLoaded] =
+    useState(false);
+
+  const categoryRef =
+    useRef<HTMLDivElement>(null);
+
+  const metalRef =
+    useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchWishlistIds().then((ids) => {
       setLikedIds(new Set(ids));
+
       setWishlistLoaded(true);
     });
   }, []);
 
   // Close dropdowns on outside click
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (categoryRef.current && !categoryRef.current.contains(event.target as Node)) {
+      if (
+        categoryRef.current &&
+        !categoryRef.current.contains(
+          event.target as Node
+        )
+      ) {
         setIsCategoryOpen(false);
       }
-      if (metalRef.current && !metalRef.current.contains(event.target as Node)) {
+
+      if (
+        metalRef.current &&
+        !metalRef.current.contains(
+          event.target as Node
+        )
+      ) {
         setIsMetalOpen(false);
       }
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+
+    document.addEventListener(
+      'mousedown',
+      handleClickOutside
+    );
+
+    return () =>
+      document.removeEventListener(
+        'mousedown',
+        handleClickOutside
+      );
   }, []);
 
-  const handleMetalSelect = (metal: string) => {
+  const handleMetalSelect = (
+    metal: string
+  ) => {
     if (onMetalChange) {
       onMetalChange(metal);
     } else {
       setInternalMetal(metal);
     }
+
     setIsMetalOpen(false);
   };
 
-  const handleCategorySelect = (category: string) => {
+  const handleCategorySelect = (
+    category: string
+  ) => {
     if (onCategoryChange) {
       onCategoryChange(category);
     }
+
     setIsCategoryOpen(false);
   };
 
   // Toggle a single product's liked state — optimistic, reverts on API failure.
-  const handleToggleLike = async (productId: string | number) => {
+
+  const handleToggleLike = async (
+    productId: string | number
+  ) => {
     const id = String(productId);
+
     const wasLiked = likedIds.has(id);
 
     setLikedIds((prev) => {
       const next = new Set(prev);
-      if (wasLiked) next.delete(id);
-      else next.add(id);
+
+      if (wasLiked) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
       return next;
     });
 
     try {
       await toggleWishlist(id);
     } catch (err) {
-      console.error('Wishlist toggle failed:', err);
+      console.error(
+        'Wishlist toggle failed:',
+        err
+      );
+
       // revert optimistic update
+
       setLikedIds((prev) => {
         const next = new Set(prev);
-        if (wasLiked) next.add(id);
-        else next.delete(id);
+
+        if (wasLiked) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+
         return next;
       });
     }
   };
 
   // Combined Category + Metal Filter Logic
+
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
-      const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
+      const matchesCategory =
+        selectedCategory === 'All' ||
+        p.category === selectedCategory;
+
       const matchesMetal =
         activeMetal === 'All Metals' ||
-        (p.metalType && p.metalType.toLowerCase() === activeMetal.toLowerCase());
+        (p.metalType &&
+          p.metalType.toLowerCase() ===
+            activeMetal.toLowerCase());
 
       return matchesCategory && matchesMetal;
     });
-  }, [products, selectedCategory, activeMetal]);
+  }, [
+    products,
+    selectedCategory,
+    activeMetal,
+  ]);
 
   const handleResetFilters = () => {
-    if (onCategoryChange) onCategoryChange('All');
+    if (onCategoryChange) {
+      onCategoryChange('All');
+    }
+
     handleMetalSelect('All Metals');
   };
 
@@ -179,25 +341,33 @@ export function ProductSection({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Header & Clean Dropdown Filter Bar */}
+
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 border-b border-black/5 pb-8">
+
           <div>
             <span className="text-xs font-bold uppercase tracking-widest text-amber-900/60 mb-1 block">
               Exclusive Collection
             </span>
+
             <h2 className="text-3xl sm:text-4xl font-extrabold text-[#04091e] tracking-tight">
               Explore Crafted Jewels
             </h2>
           </div>
 
           {/* Filter Dropdowns Container */}
-          
+
         </div>
 
         {/* Product Grid */}
+
         {isLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 sm:gap-8">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <ProductSkeletonCard key={index} />
+            {Array.from({
+              length: 4,
+            }).map((_, index) => (
+              <ProductSkeletonCard
+                key={index}
+              />
             ))}
           </div>
         ) : filteredProducts.length > 0 ? (
@@ -206,29 +376,54 @@ export function ProductSection({
             className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 sm:gap-8"
           >
             <AnimatePresence>
-              {filteredProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  isLiked={likedIds.has(String(product.id))}
-                  onToggleLike={() => handleToggleLike(product.id)}
-                  onEnquire={() => onEnquire && onEnquire(product)}
-                />
-              ))}
+              {filteredProducts.map(
+                (product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    isLiked={likedIds.has(
+                      String(product.id)
+                    )}
+                    onToggleLike={() =>
+                      handleToggleLike(
+                        product.id
+                      )
+                    }
+                    onEnquire={() =>
+                      onEnquire &&
+                      onEnquire(product)
+                    }
+                  />
+                )
+              )}
             </AnimatePresence>
           </motion.div>
         ) : (
           <div className="text-center py-20 bg-white/50 rounded-3xl backdrop-blur-sm">
+
             <div className="w-16 h-16 bg-amber-100/50 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-900">
               <Filter size={24} />
             </div>
-            <h3 className="text-xl font-extrabold text-[#04091e]">No items found</h3>
+
+            <h3 className="text-xl font-extrabold text-[#04091e]">
+              No items found
+            </h3>
+
             <p className="text-gray-500 text-sm mt-1 max-w-xs mx-auto">
-              We couldn't find any {activeMetal !== 'All Metals' ? activeMetal : ''} items matching "{selectedCategory}".
+              We couldn't find any{' '}
+              {activeMetal !==
+              'All Metals'
+                ? activeMetal
+                : ''}{' '}
+              items matching "
+              {selectedCategory}".
             </p>
+
             <button
               type="button"
-              onClick={handleResetFilters}
+              onClick={
+                handleResetFilters
+              }
               className="mt-6 px-6 py-2.5 bg-[#04091e] text-white text-xs font-bold rounded-full uppercase tracking-wider hover:bg-black transition-colors cursor-pointer"
             >
               Reset All Filters
@@ -242,13 +437,19 @@ export function ProductSection({
 
 function ProductCard({
   product,
+
   isLiked,
+
   onToggleLike,
+
   onEnquire,
 }: {
   product: Product;
+
   isLiked: boolean;
+
   onToggleLike: () => void;
+
   onEnquire: () => void;
 }) {
   const productUrl = `/products/${product.id}`;
@@ -256,94 +457,174 @@ function ProductCard({
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.3 }}
+      initial={{
+        opacity: 0,
+        y: 20,
+      }}
+      animate={{
+        opacity: 1,
+        y: 0,
+      }}
+      exit={{
+        opacity: 0,
+        scale: 0.95,
+      }}
+      transition={{
+        duration: 0.3,
+      }}
       className="group flex flex-col"
     >
       {/* Seamless Image Wrapper */}
+
       <div className="relative aspect-[4/5] bg-gray-200/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500">
-        <a href={productUrl} className="block w-full h-full">
+
+        <a
+          href={productUrl}
+          className="block w-full h-full"
+        >
           <img
-            src={product.images?.[0] || 'https://via.placeholder.com/400x500?text=Jewellery'}
+            src={
+              product.images?.[0] ||
+              'https://via.placeholder.com/400x500?text=Jewellery'
+            }
             alt={product.name}
             className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-700 ease-out"
             loading="lazy"
             onError={(e) => {
-              (e.target as HTMLImageElement).src =
+              (
+                e.target as HTMLImageElement
+              ).src =
                 'https://via.placeholder.com/400x500?text=Jewellery';
             }}
           />
         </a>
 
         {/* Floating Badges */}
+
         <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10 pointer-events-none">
+
           {product.featured && (
             <span className="px-3 py-1 bg-amber-400 text-[#04091e] text-[9px] font-black uppercase rounded-full tracking-wider shadow-sm">
               Featured
             </span>
           )}
+
           {product.discountPercentage && (
             <span className="px-3 py-1 bg-rose-600 text-white text-[9px] font-bold rounded-full tracking-wider shadow-sm">
-              {product.discountPercentage}% OFF
+              {
+                product.discountPercentage
+              }
+              % OFF
             </span>
           )}
         </div>
 
         {/* Floating Wishlist Button */}
+
         <button
           type="button"
-          aria-label={isLiked ? 'Remove from wishlist' : 'Save to wishlist'}
+          aria-label={
+            isLiked
+              ? 'Remove from wishlist'
+              : 'Save to wishlist'
+          }
           onClick={(e) => {
             e.preventDefault();
+
             e.stopPropagation();
+
             onToggleLike();
           }}
           className="absolute top-3 right-3 p-2.5 bg-white/80 backdrop-blur-md rounded-full text-gray-700 hover:text-rose-500 hover:bg-white shadow-md transition-all duration-300 z-10 cursor-pointer"
         >
-          <Heart size={16} className={isLiked ? 'fill-rose-500 text-rose-500' : ''} />
+          <Heart
+            size={16}
+            className={
+              isLiked
+                ? 'fill-rose-500 text-rose-500'
+                : ''
+            }
+          />
         </button>
 
         {/* Quick View Overlay Bar on Hover */}
+
         <div className="absolute inset-x-3 bottom-3 opacity-0 group-hover:opacity-100 transition-all duration-300 z-10 hidden sm:block transform translate-y-2 group-hover:translate-y-0">
+
           <a
             href={productUrl}
             className="w-full py-2.5 bg-[#04091e]/95 backdrop-blur-md text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-[#04091e] transition-colors"
           >
-            <Eye size={14} /> Quick View
+            <Eye size={14} />
+
+            Quick View
           </a>
         </div>
       </div>
 
       {/* Clean Typography Content Stack */}
+
       <div className="pt-4 flex flex-col flex-1 gap-1.5 px-1">
 
         {/* Store Name */}
+
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span className="font-semibold uppercase tracking-wider text-[10px] text-amber-900/70">
-            {product.storeName || 'Jewellery Partner'}
+            {product.storeName ||
+              'Jewellery Partner'}
           </span>
         </div>
 
         {/* Product Title linked to URL */}
-        <a href={productUrl} className="group-hover:text-amber-800 transition-colors">
+
+        <a
+          href={productUrl}
+          className="group-hover:text-amber-800 transition-colors"
+        >
           <h3 className="text-base font-bold text-[#04091e] leading-snug line-clamp-1">
             {product.name}
           </h3>
         </a>
 
         {/* Material & Category Tags */}
-        <div className="flex items-center gap-2 my-1">
+
+        <div className="flex items-center gap-2 my-1 flex-wrap">
+
           <span className="text-[11px] font-medium text-gray-500 bg-white/80 px-2.5 py-0.5 rounded-full border border-black/5">
             {product.category}
           </span>
+
           {product.metalType && (
             <span className="text-[11px] font-semibold text-amber-900/80 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200/50">
               {product.metalType}
             </span>
           )}
         </div>
+
+        {/* Enquiry Count */}
+        {/* Only display when enquiry count is greater than 0 */}
+
+        {(product.enquriycount ?? 0) >
+          0 && (
+          <div className="mt-2 pt-2 border-t border-black/5">
+
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500">
+
+              <MessageCircle
+                size={13}
+                className="text-amber-700 shrink-0"
+              />
+
+              <span>
+                {product.enquriycount}{' '}
+                {product.enquriycount ===
+                1
+                  ? 'Enquiry'
+                  : 'Enquiries'}
+              </span>
+            </div>
+          </div>
+        )}
 
       </div>
     </motion.div>
@@ -353,17 +634,29 @@ function ProductCard({
 function ProductSkeletonCard() {
   return (
     <div className="flex flex-col animate-pulse">
+
       <div className="aspect-[4/5] bg-gray-200/70 rounded-2xl" />
+
       <div className="pt-4 flex flex-col gap-2 px-1">
+
         <div className="flex justify-between items-center">
+
           <div className="h-3 bg-gray-200/70 rounded w-1/3" />
+
           <div className="h-3 bg-gray-200/70 rounded w-1/4" />
+
         </div>
+
         <div className="h-5 bg-gray-200/70 rounded w-3/4" />
+
         <div className="h-4 bg-gray-200/70 rounded w-1/2" />
+
         <div className="flex justify-between items-center pt-2">
+
           <div className="h-6 bg-gray-200/70 rounded w-1/3" />
+
           <div className="h-8 bg-gray-200/70 rounded-xl w-8" />
+
         </div>
       </div>
     </div>

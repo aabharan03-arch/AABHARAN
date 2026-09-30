@@ -124,6 +124,7 @@ model Product {
   displayOrder Int      @default(1)
   images       String[] // Array of image URLs
   views        Int      @default(0)
+  enquriycount Int      @default(0)
 
   storeId      String
   storeName    String
