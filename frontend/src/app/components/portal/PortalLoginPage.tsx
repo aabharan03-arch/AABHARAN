@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { Mail, Lock, Store, ArrowLeft, ArrowRight, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 
 // Adjust path based on your assets setup
-import logo from '../asserts/logo.jpeg'; 
+import logo from '../asserts/logo3.png'; 
 
 // Set your backend base URL (adjust if running on a custom port/domain)
 const API_BASE_URL = 'https://aabharan.vercel.app/api/storeadmin';
@@ -62,7 +62,7 @@ export function PortalLoginPage() {
 
   // Quick preset function for demo convenience
   const fillDemoCredentials = () => {
-    setForm({ email: 'demo@tanishq.co.in', password: 'demo1234' });
+    setForm({ email: '', password: '' });
     setError('');
   };
 
@@ -232,11 +232,10 @@ export function PortalLoginPage() {
                 >
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center justify-between">
                     <span>Demo Credentials</span>
-                    <span className="text-[10px] text-[#04091e] font-semibold lowercase bg-white px-2 py-0.5 rounded border border-gray-200">click to fill</span>
                   </p>
                   <div className="flex flex-col gap-1.5">
-                    <p className="text-sm font-medium text-gray-600"><strong className="text-[#04091e]">Email:</strong> demo@tanishq.co.in</p>
-                    <p className="text-sm font-medium text-gray-600"><strong className="text-[#04091e]">Password:</strong> demo1234</p>
+                    <p className="text-sm font-medium text-gray-600"><strong className="text-[#04091e]">Email:</strong> Suvarna@gmail.com</p>
+                    <p className="text-sm font-medium text-gray-600"><strong className="text-[#04091e]">Password:</strong> Suvarna@12</p>
                   </div>
                 </div>
               </div>
