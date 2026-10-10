@@ -1,11 +1,65 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Search, Edit, Trash2, Copy, Star, Eye, X, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { CATEGORIES, METAL_TYPES } from '../data/mockData';
-import type { Product } from '../data/mockData';
-import { fetchProducts, createProduct, updateProduct, deleteProduct as deleteProductApi, getCurrentStoreId, fetchCategories, fetchMetalTypes } from '../../lib/api';
 
-const PURITY_OPTIONS = ['22K', '24K', '18K', '925 Sterling Silver', 'PT950', 'PT900'];
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from 'react';
+import type {
+  CSSProperties,
+  ChangeEvent,
+  MouseEvent,
+} from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  Copy,
+  Star,
+  Eye,
+  X,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  ImagePlus,
+  AlertCircle,
+  RefreshCw,
+} from 'lucide-react';
+
+import {
+  CATEGORIES,
+  METAL_TYPES,
+} from '../data/mockData';
+import type { Product } from '../data/mockData';
+
+import {
+  fetchProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct as deleteProductApi,
+  getCurrentStoreId,
+  fetchCategories,
+  fetchMetalTypes,
+} from '../../lib/api';
+
+// ============================================================
+// CONFIGURATION
+// ============================================================
+
+const MAX_PRODUCT_IMAGES = 2;
+const MAX_IMAGE_SIZE_BYTES = 500 * 1024;
+const CACHE_KEY_PREFIX = 'products_cache_store_';
+
+const PURITY_OPTIONS = [
+  '22K',
+  '24K',
+  '18K',
+  '925 Sterling Silver',
+  'PT950',
+  'PT900',
+];
 
 const T = {
   ivory: '#f9f7ee',
@@ -18,114 +72,312 @@ const T = {
   dangerSoft: '#f6e3e1',
 };
 
-// Key template for caching in local storage
-const CACHE_KEY_PREFIX = 'products_cache_store_';
+type Option = {
+  id: string;
+  name: string;
+};
+
+const inputStyle: CSSProperties = {
+  fontFamily: 'Inter, sans-serif',
+  backgroundColor: T.ivory,
+  border: `1px solid ${T.ivoryShade}`,
+  color: T.navy,
+  borderRadius: '10px',
+  padding: '10px 12px',
+  fontSize: '13.5px',
+  width: '100%',
+  outline: 'none',
+};
+
+const labelStyle: CSSProperties = {
+  fontSize: '12px',
+  fontWeight: 600,
+  color: T.muted,
+  marginBottom: '6px',
+  display: 'block',
+};
+
+const primaryButton: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '8px',
+  backgroundColor: T.navy,
+  color: T.gold,
+  border: 'none',
+  borderRadius: '10px',
+  padding: '11px 20px',
+  fontSize: '13px',
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
+const secondaryButton: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '6px',
+  backgroundColor: T.ivory,
+  color: T.navy,
+  border: `1px solid ${T.ivoryShade}`,
+  borderRadius: '9px',
+  padding: '9px 12px',
+  fontSize: '12px',
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
+function getCacheKey(storeId: string) {
+  return `${CACHE_KEY_PREFIX}${storeId}`;
+}
+
+function cacheProducts(
+  storeId: string,
+  products: Product[]
+) {
+  try {
+    localStorage.setItem(
+      getCacheKey(storeId),
+      JSON.stringify(products)
+    );
+  } catch (error) {
+    console.warn('Unable to cache products:', error);
+  }
+}
+
+function getUniqueOptions(
+  defaults: string[],
+  apiOptions: Option[],
+  current?: string
+) {
+  return Array.from(
+    new Set(
+      [
+        ...defaults.filter(x => x !== 'All'),
+        ...apiOptions.map(x => x.name),
+        ...(current ? [current] : []),
+      ].filter(Boolean)
+    )
+  );
+}
+
+// ============================================================
+// MAIN PRODUCTS PAGE - NAMED EXPORT REQUIRED BY App.tsx
+// ============================================================
 
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(
+    null
+  );
 
-  // API-fetched categories and metal types
-  const [apiCategories, setApiCategories] = useState<Array<{ id: string; name: string }>>([]);
-  const [apiMetalTypes, setApiMetalTypes] = useState<Array<{ id: string; name: string }>>([]);
+  const [apiCategories, setApiCategories] = useState<
+    Option[]
+  >([]);
+  const [apiMetalTypes, setApiMetalTypes] = useState<
+    Option[]
+  >([]);
 
   const [query, setQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [categoryFilter, setCategoryFilter] =
+    useState('All');
   const [metalFilter, setMetalFilter] = useState('All');
+
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [editProduct, setEditProduct] = useState<Product | null>(null);
-  const [deleteProduct, setDeleteProduct] = useState<Product | null>(null);
-  const [prefill, setPrefill] = useState<Partial<Product> | null>(null);
+  const [editProduct, setEditProduct] =
+    useState<Product | null>(null);
+  const [deleteProduct, setDeleteProduct] =
+    useState<Product | null>(null);
+  const [prefill, setPrefill] =
+    useState<Partial<Product> | null>(null);
 
-  const loadProducts = useCallback(async (ignoreCache = false) => {
-    setLoading(true);
-    setLoadError(null);
-    const storeId = getCurrentStoreId();
-    
-    if (!storeId) {
-      setLoadError('Not logged in — no store admin session found.');
-      setLoading(false);
-      return;
-    }
+  const [deleting, setDeleting] = useState(false);
+  const [featuredBusyId, setFeaturedBusyId] =
+    useState<string | null>(null);
 
-    const cacheKey = `${CACHE_KEY_PREFIX}${storeId}`;
+  // ----------------------------------------------------------
+  // LOAD PRODUCTS
+  // ----------------------------------------------------------
 
-    // 1. Check LocalStorage first if ignoreCache is false
-    if (!ignoreCache) {
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        try {
-          const parsedCache = JSON.parse(cached);
-          setProducts(parsedCache);
-          setLoading(false);
-          // Still fetch categories and metal types in background
-          try {
-            const cats = await fetchCategories();
-            setApiCategories(cats);
-          } catch (err) {
-            console.error('Failed to fetch categories:', err);
-          }
-          try {
-            const metals = await fetchMetalTypes();
-            setApiMetalTypes(metals);
-          } catch (err) {
-            console.error('Failed to fetch metal types:', err);
-          }
-          return; // Skip main API call if cache hit
-        } catch {
-          localStorage.removeItem(cacheKey);
-        }
+  const loadProducts = useCallback(
+    async (ignoreCache = false) => {
+      setLoading(true);
+      setLoadError(null);
+
+      const storeId = getCurrentStoreId();
+
+      if (!storeId) {
+        setProducts([]);
+        setLoadError(
+          'Not logged in — no store admin session found.'
+        );
+        setLoading(false);
+        return;
       }
-    }
 
-    // 2. Fetch from API if no cache or cache ignored
-    try {
-      const [data, cats, metals] = await Promise.all([
-        fetchProducts(storeId),
-        fetchCategories(),
-        fetchMetalTypes(),
-      ]);
-      const productList = data as Product[];
-      setProducts(productList);
-      setApiCategories(cats);
-      setApiMetalTypes(metals);
-      // Save data locally
-      localStorage.setItem(cacheKey, JSON.stringify(productList));
-    } catch (err: any) {
-      setLoadError(err.message ?? 'Failed to load products.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      try {
+        if (!ignoreCache) {
+          const cached = localStorage.getItem(
+            getCacheKey(storeId)
+          );
+
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+
+              if (Array.isArray(parsed)) {
+                setProducts(parsed as Product[]);
+                setLoading(false);
+
+                // Fetch dropdown options without blocking
+                // the cached product display.
+                const results = await Promise.allSettled([
+                  fetchCategories(),
+                  fetchMetalTypes(),
+                ]);
+
+                if (results[0].status === 'fulfilled') {
+                  setApiCategories(results[0].value);
+                }
+
+                if (results[1].status === 'fulfilled') {
+                  setApiMetalTypes(results[1].value);
+                }
+
+                return;
+              }
+            } catch {
+              localStorage.removeItem(
+                getCacheKey(storeId)
+              );
+            }
+          }
+        }
+
+        const results = await Promise.allSettled([
+          fetchProducts(storeId),
+          fetchCategories(),
+          fetchMetalTypes(),
+        ]);
+
+        const productResult = results[0];
+
+        if (productResult.status === 'rejected') {
+          throw productResult.reason;
+        }
+
+        const productList = productResult.value as Product[];
+
+        if (!Array.isArray(productList)) {
+          throw new Error('Invalid products response.');
+        }
+
+        setProducts(productList);
+        cacheProducts(storeId, productList);
+
+        if (results[1].status === 'fulfilled') {
+          setApiCategories(results[1].value);
+        }
+
+        if (results[2].status === 'fulfilled') {
+          setApiMetalTypes(results[2].value);
+        }
+      } catch (err: unknown) {
+        setLoadError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to load products.'
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
-    loadProducts();
+    void loadProducts();
   }, [loadProducts]);
 
-  // Sync state changes with localStorage cache to keep local cache fresh
-  const updateProductsAndCache = (newProducts: Product[] | ((prev: Product[]) => Product[])) => {
-    setProducts((prev) => {
-      const updated = typeof newProducts === 'function' ? newProducts(prev) : newProducts;
-      const storeId = getCurrentStoreId();
-      if (storeId) {
-        localStorage.setItem(`${CACHE_KEY_PREFIX}${storeId}`, JSON.stringify(updated));
-      }
-      return updated;
-    });
-  };
+  // ----------------------------------------------------------
+  // PRODUCT STATE + CACHE
+  // ----------------------------------------------------------
 
-  // Memoize filtered results so we don't recalculate unless dependencies change
+  const updateProductsAndCache = useCallback(
+    (updater: (prev: Product[]) => Product[]) => {
+      setProducts(prev => updater(prev));
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (loading || loadError) return;
+
+    const storeId = getCurrentStoreId();
+    if (storeId) {
+      cacheProducts(storeId, products);
+    }
+  }, [products, loading, loadError]);
+
+  // ----------------------------------------------------------
+  // FILTER OPTIONS
+  // ----------------------------------------------------------
+
+  const categoryOptions = useMemo(
+    () =>
+      getUniqueOptions(
+        CATEGORIES,
+        apiCategories,
+        categoryFilter !== 'All'
+          ? categoryFilter
+          : undefined
+      ),
+    [apiCategories, categoryFilter]
+  );
+
+  const metalOptions = useMemo(
+    () =>
+      getUniqueOptions(
+        METAL_TYPES,
+        apiMetalTypes,
+        metalFilter !== 'All'
+          ? metalFilter
+          : undefined
+      ),
+    [apiMetalTypes, metalFilter]
+  );
+
   const filtered = useMemo(() => {
-    return products.filter(p => {
-      const matchesQuery = !query || p.name.toLowerCase().includes(query.toLowerCase());
-      const matchesCategory = categoryFilter === 'All' || p.category === categoryFilter;
-      const matchesMetal = metalFilter === 'All' || p.metalType === metalFilter;
-      return matchesQuery && matchesCategory && matchesMetal;
+    const search = query.trim().toLowerCase();
+
+    return products.filter(product => {
+      const matchesQuery =
+        !search ||
+        (product.name || '')
+          .toLowerCase()
+          .includes(search);
+
+      const matchesCategory =
+        categoryFilter === 'All' ||
+        product.category === categoryFilter;
+
+      const matchesMetal =
+        metalFilter === 'All' ||
+        product.metalType === metalFilter;
+
+      return (
+        matchesQuery &&
+        matchesCategory &&
+        matchesMetal
+      );
     });
   }, [products, query, categoryFilter, metalFilter]);
 
-  const hasActiveFilters = query || categoryFilter !== 'All' || metalFilter !== 'All';
+  const hasActiveFilters =
+    Boolean(query.trim()) ||
+    categoryFilter !== 'All' ||
+    metalFilter !== 'All';
 
   function clearFilters() {
     setQuery('');
@@ -133,44 +385,163 @@ export function ProductsPage() {
     setMetalFilter('All');
   }
 
-  async function handleDelete(product: Product) {
-    try {
-      await deleteProductApi(product.id);
-      updateProductsAndCache(ps => ps.filter(p => p.id !== product.id));
-    } catch (err: any) {
-      alert(err.message ?? 'Failed to delete product.');
-    } finally {
-      setDeleteProduct(null);
-    }
+  // ----------------------------------------------------------
+  // CREATE / EDIT
+  // ----------------------------------------------------------
+
+  function openAddModal() {
+    setEditProduct(null);
+    setPrefill(null);
+    setAddModalOpen(true);
+  }
+
+  function openEditModal(product: Product) {
+    setAddModalOpen(false);
+    setPrefill(null);
+    setEditProduct(product);
+  }
+
+  function closeModal() {
+    setAddModalOpen(false);
+    setEditProduct(null);
+    setPrefill(null);
   }
 
   function handleDuplicate(product: Product) {
+    const {
+      id: _id,
+      ...copyFields
+    } = product;
+
     setEditProduct(null);
+
+    setPrefill({
+      ...copyFields,
+      name: `${product.name} (Copy)`,
+      featured: false,
+      views: 0,
+      // Existing image URLs are reused.
+      // The 2-image restriction still applies.
+      images: (product.images || []).slice(
+        0,
+        MAX_PRODUCT_IMAGES
+      ),
+    });
+
     setAddModalOpen(true);
-    setPrefill({ ...product, id: undefined, name: `${product.name} (Copy)`, featured: false } as any);
   }
 
-  async function handleToggleFeatured(product: Product) {
-    const nextFeatured = !product.featured;
-    updateProductsAndCache(ps => ps.map(p => p.id === product.id ? { ...p, featured: nextFeatured } : p));
+  function handleSaved(
+    saved: Product,
+    isNew: boolean
+  ) {
+    updateProductsAndCache(prev => {
+      if (isNew) {
+        return [
+          saved,
+          ...prev.filter(p => p.id !== saved.id),
+        ];
+      }
+
+      return prev.map(p =>
+        p.id === saved.id ? saved : p
+      );
+    });
+
+    closeModal();
+  }
+
+  // ----------------------------------------------------------
+  // DELETE
+  // ----------------------------------------------------------
+
+  async function handleDelete(product: Product) {
+    if (deleting) return;
+
+    setDeleting(true);
+
     try {
-      const fd = new FormData();
-      fd.append('featured', String(nextFeatured));
-      fd.append('existingImages', JSON.stringify(product.images || []));
-      await updateProduct(product.id, fd);
-    } catch (err: any) {
-      updateProductsAndCache(ps => ps.map(p => p.id === product.id ? { ...p, featured: product.featured } : p));
-      alert(err.message ?? 'Failed to update featured status.');
+      await deleteProductApi(product.id);
+
+      updateProductsAndCache(prev =>
+        prev.filter(p => p.id !== product.id)
+      );
+
+      setDeleteProduct(null);
+    } catch (err: unknown) {
+      alert(
+        err instanceof Error
+          ? err.message
+          : 'Failed to delete product.'
+      );
+    } finally {
+      setDeleting(false);
     }
   }
 
+  // ----------------------------------------------------------
+  // FEATURED STATUS
+  // ----------------------------------------------------------
+
+  async function handleToggleFeatured(product: Product) {
+    if (featuredBusyId) return;
+
+    setFeaturedBusyId(product.id);
+
+    const nextFeatured = !product.featured;
+
+    try {
+      const fd = new FormData();
+
+      fd.append('featured', String(nextFeatured));
+      fd.append(
+        'existingImages',
+        JSON.stringify(product.images || [])
+      );
+
+      const updated = await updateProduct(
+        product.id,
+        fd
+      );
+
+      updateProductsAndCache(prev =>
+        prev.map(p =>
+          p.id === product.id
+            ? {
+                ...p,
+                ...(updated || {}),
+                featured: nextFeatured,
+              }
+            : p
+        )
+      );
+    } catch (err: unknown) {
+      alert(
+        err instanceof Error
+          ? err.message
+          : 'Failed to update featured status.'
+      );
+    } finally {
+      setFeaturedBusyId(null);
+    }
+  }
+
+  // ----------------------------------------------------------
+  // RENDER
+  // ----------------------------------------------------------
+
   return (
-    <div className="flex flex-col gap-xl" style={{ fontFamily: 'Inter, var(--font-family-sans)' }}>
+    <div
+      className="flex flex-col gap-xl"
+      style={{
+        fontFamily: 'Inter, sans-serif',
+      }}
+    >
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
       `}</style>
 
-      {/* Header */}
+      {/* PAGE HEADER */}
       <div className="flex items-start justify-between flex-wrap gap-lg">
         <div>
           <h1
@@ -185,82 +556,161 @@ export function ProductsPage() {
           >
             Products
           </h1>
-          <div style={{ width: '40px', height: '2px', backgroundColor: T.gold, marginTop: '12px', marginBottom: '10px' }} />
-          <p style={{ color: T.muted, fontSize: '13px' }}>
+
+          <div
+            style={{
+              width: '40px',
+              height: '2px',
+              backgroundColor: T.gold,
+              marginTop: '12px',
+              marginBottom: '10px',
+            }}
+          />
+
+          <p
+            style={{
+              color: T.muted,
+              fontSize: '13px',
+            }}
+          >
             {loading
               ? 'Loading products…'
-              : `${filtered.length} of ${products.length} products${hasActiveFilters ? ' · filtered' : ' in your catalogue'}`}
+              : `${filtered.length} of ${products.length} products${
+                  hasActiveFilters
+                    ? ' · filtered'
+                    : ' in your catalogue'
+                }`}
           </p>
         </div>
-        <button
-          onClick={() => { setPrefill(null); setAddModalOpen(true); }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            backgroundColor: T.navy,
-            color: T.gold,
-            border: 'none',
-            borderRadius: '10px',
-            padding: '11px 20px',
-            fontSize: '13px',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          <Plus size={16} /> Add Product
-        </button>
+
+        <div className="flex items-center gap-sm">
+          <button
+            onClick={() => void loadProducts(true)}
+            title="Refresh products"
+            style={secondaryButton}
+            disabled={loading}
+          >
+            <RefreshCw
+              size={15}
+              className={loading ? 'animate-spin' : ''}
+            />
+            Refresh
+          </button>
+
+          <button
+            onClick={openAddModal}
+            style={primaryButton}
+          >
+            <Plus size={16} />
+            Add Product
+          </button>
+        </div>
       </div>
 
-      {/* Search Filter */}
+      {/* SEARCH */}
       <div
-        style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '16px 20px', border: `1px solid ${T.ivoryShade}` }}
+        style={{
+          backgroundColor: '#fff',
+          borderRadius: '16px',
+          padding: '16px 20px',
+          border: `1px solid ${T.ivoryShade}`,
+        }}
         className="flex flex-col md:flex-row md:items-center gap-lg"
       >
-        <div className="relative flex-shrink-0 w-full md:w-[300px]">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2" color={T.muted} />
+        <div className="relative w-full md:w-[300px]">
+          <Search
+            size={15}
+            className="absolute left-3.5 top-1/2 -translate-y-1/2"
+            color={T.muted}
+          />
+
           <input
             type="text"
             placeholder="Search products..."
             value={query}
             onChange={e => setQuery(e.target.value)}
-            className="w-full rounded-corner-md focus:outline-none"
             style={{
-              fontFamily: 'Inter, var(--font-family-sans)',
-              backgroundColor: T.ivory,
-              border: `1px solid ${T.ivoryShade}`,
-              color: T.navy,
-              paddingLeft: '34px',
-              paddingRight: '14px',
-              height: '38px',
-              fontSize: '13px',
+              ...inputStyle,
+              paddingLeft: '36px',
+              height: '40px',
             }}
-            onFocus={e => (e.currentTarget.style.borderColor = T.gold)}
-            onBlur={e => (e.currentTarget.style.borderColor = T.ivoryShade)}
           />
         </div>
 
         {hasActiveFilters && (
           <button
             onClick={clearFilters}
-            className="flex-shrink-0 flex items-center gap-xs"
+            className="flex items-center gap-xs"
             style={{
-              fontSize: '12px',
-              fontWeight: 600,
+              ...secondaryButton,
               color: T.danger,
               backgroundColor: T.dangerSoft,
-              border: 'none',
-              borderRadius: '8px',
-              padding: '8px 14px',
-              cursor: 'pointer',
             }}
           >
-            <X size={13} /> Clear filters
+            <X size={13} />
+            Clear filters
           </button>
         )}
       </div>
 
-      {/* Skeleton Loading state */}
+      {/* CATEGORY + METAL FILTERS */}
+      <div
+        className="flex flex-col md:flex-row gap-lg"
+        style={{
+          backgroundColor: '#fff',
+          borderRadius: '16px',
+          border: `1px solid ${T.ivoryShade}`,
+          padding: '16px 20px',
+        }}
+      >
+        <div className="flex-1 min-w-0">
+          <label style={labelStyle}>Category</label>
+
+          <select
+            value={categoryFilter}
+            onChange={e =>
+              setCategoryFilter(e.target.value)
+            }
+            style={inputStyle}
+          >
+            <option value="All">All Categories</option>
+
+            {categoryOptions.map(category => (
+              <option
+                key={category}
+                value={category}
+              >
+                {category}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <label style={labelStyle}>Metal Type</label>
+
+          <select
+            value={metalFilter}
+            onChange={e =>
+              setMetalFilter(e.target.value)
+            }
+            style={inputStyle}
+          >
+            <option value="All">All Metal Types</option>
+
+            {metalOptions.map(metal => (
+              <option
+                key={metal}
+                value={metal}
+              >
+                {metal}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* LOADING */}
       {loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-xl">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -269,18 +719,39 @@ export function ProductsPage() {
         </div>
       )}
 
-      {/* Error state */}
+      {/* ERROR */}
       {!loading && loadError && (
         <div
           className="text-center"
-          style={{ backgroundColor: T.dangerSoft, borderRadius: '16px', padding: '32px 24px', border: `1px solid ${T.danger}` }}
+          style={{
+            backgroundColor: T.dangerSoft,
+            borderRadius: '16px',
+            padding: '32px 24px',
+            border: `1px solid ${T.danger}`,
+          }}
         >
-          <p style={{ fontSize: '13.5px', color: T.danger, marginBottom: '14px' }}>{loadError}</p>
-          <button
-            onClick={() => loadProducts(true)}
+          <AlertCircle
+            size={24}
+            color={T.danger}
+            className="mx-auto mb-3"
+          />
+
+          <p
             style={{
-              fontSize: '13px', fontWeight: 600, color: '#fff', backgroundColor: T.danger,
-              border: 'none', borderRadius: '10px', padding: '9px 18px', cursor: 'pointer',
+              fontSize: '13px',
+              color: T.danger,
+              marginBottom: '14px',
+            }}
+          >
+            {loadError}
+          </p>
+
+          <button
+            onClick={() => void loadProducts(true)}
+            style={{
+              ...primaryButton,
+              backgroundColor: T.danger,
+              color: '#fff',
             }}
           >
             Retry
@@ -288,196 +759,185 @@ export function ProductsPage() {
         </div>
       )}
 
-      {/* Product Grid with Right Sidebar Dropdowns */}
+      {/* PRODUCTS GRID */}
       {!loading && !loadError && (
-        <div className="flex flex-col gap-lg">
-          {/* Filters in single line */}
-          <div
-            style={{
-              backgroundColor: '#ffffff',
-              borderRadius: '16px',
-              border: `1px solid ${T.ivoryShade}`,
-              padding: '16px 20px',
-            }}
-            className="flex flex-col md:flex-row md:items-center gap-lg"
-          >
-            {/* Category Dropdown */}
-            <div className="flex-1 min-w-0">
-              <label style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted, marginBottom: '6px', display: 'block' }}>
-                Category
-              </label>
-              <select
-                value={categoryFilter}
-                onChange={e => setCategoryFilter(e.target.value)}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-xl">
+          <AnimatePresence>
+            {filtered.map(product => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                featuredBusy={
+                  featuredBusyId === product.id
+                }
+                onToggleFeatured={
+                  handleToggleFeatured
+                }
+                onEdit={openEditModal}
+                onDuplicate={handleDuplicate}
+                onDelete={setDeleteProduct}
+              />
+            ))}
+          </AnimatePresence>
+
+          {filtered.length === 0 && (
+            <div
+              className="col-span-1 md:col-span-2 lg:col-span-3 text-center"
+              style={{
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                padding: '48px 24px',
+                border: `1px solid ${T.ivoryShade}`,
+              }}
+            >
+              <p
                 style={{
-                  fontFamily: 'Inter, var(--font-family-sans)',
-                  backgroundColor: T.ivory,
-                  border: `1px solid ${T.ivoryShade}`,
-                  color: T.navy,
-                  borderRadius: '10px',
-                  padding: '10px 12px',
-                  fontSize: '13px',
-                  width: '100%',
-                  outline: 'none',
-                  cursor: 'pointer',
+                  fontSize: '13.5px',
+                  color: T.muted,
+                  marginBottom: '18px',
                 }}
               >
-                {(() => {
-                  const apiCatNames = apiCategories.map(c => c.name);
-                  const defaultCats = CATEGORIES.filter(c => c !== 'All');
-                  const combined = Array.from(new Set([...defaultCats, ...apiCatNames]));
-                  return ['All', ...combined].map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ));
-                })()}
-              </select>
+                {hasActiveFilters
+                  ? 'No products match your filters.'
+                  : 'No products yet.'}
+              </p>
+
+              {hasActiveFilters ? (
+                <button
+                  onClick={clearFilters}
+                  style={secondaryButton}
+                >
+                  Clear Filters
+                </button>
+              ) : (
+                <button
+                  onClick={openAddModal}
+                  style={primaryButton}
+                >
+                  <Plus size={16} />
+                  Add Your First Product
+                </button>
+              )}
             </div>
-
-            {/* Metal Type Dropdown */}
-            <div className="flex-1 min-w-0">
-              <label style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted, marginBottom: '6px', display: 'block' }}>
-                Metal Type
-              </label>
-              <select
-                value={metalFilter}
-                onChange={e => setMetalFilter(e.target.value)}
-                style={{
-                  fontFamily: 'Inter, var(--font-family-sans)',
-                  backgroundColor: T.ivory,
-                  border: `1px solid ${T.ivoryShade}`,
-                  color: T.navy,
-                  borderRadius: '10px',
-                  padding: '10px 12px',
-                  fontSize: '13px',
-                  width: '100%',
-                  outline: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {(() => {
-                  const apiMetalNames = apiMetalTypes.map(m => m.name);
-                  const defaultMetals = METAL_TYPES.filter(m => m !== 'All');
-                  const combined = Array.from(new Set([...defaultMetals, ...apiMetalNames]));
-                  return ['All', ...combined].map(metal => (
-                    <option key={metal} value={metal}>{metal}</option>
-                  ));
-                })()}
-              </select>
-            </div>
-          </div>
-
-          {/* Main Product Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-xl">
-            <AnimatePresence>
-              {filtered.map(product => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onToggleFeatured={handleToggleFeatured}
-                  onEdit={p => { setPrefill(null); setEditProduct(p); }}
-                  onDuplicate={handleDuplicate}
-                  onDelete={p => setDeleteProduct(p)}
-                />
-              ))}
-            </AnimatePresence>
-
-            {filtered.length === 0 && (
-              <div
-                className="col-span-1 md:col-span-2 lg:col-span-3 text-center"
-                style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '48px 24px', border: `1px solid ${T.ivoryShade}` }}
-              >
-                <p style={{ fontSize: '13.5px', color: T.muted, marginBottom: '18px' }}>
-                  {hasActiveFilters ? 'No products match your filters.' : 'No products yet.'}
-                </p>
-                {hasActiveFilters ? (
-                  <button
-                    onClick={clearFilters}
-                    style={{
-                      fontSize: '13px', fontWeight: 600, color: T.navy, backgroundColor: T.ivory,
-                      border: `1px solid ${T.ivoryShade}`, borderRadius: '10px', padding: '10px 20px', cursor: 'pointer',
-                    }}
-                  >
-                    Clear filters
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => { setPrefill(null); setAddModalOpen(true); }}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: '8px',
-                      fontSize: '13px', fontWeight: 600, color: T.gold, backgroundColor: T.navy,
-                      border: 'none', borderRadius: '10px', padding: '11px 20px', cursor: 'pointer',
-                    }}
-                  >
-                    <Plus size={16} /> Add Your First Product
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          )}
         </div>
       )}
 
-      {/* Add/Edit Modal */}
+      {/* ADD / EDIT MODAL */}
       <ProductFormModal
-        isOpen={addModalOpen || editProduct !== null}
+        isOpen={
+          addModalOpen || editProduct !== null
+        }
         product={editProduct}
         prefill={prefill}
         apiCategories={apiCategories}
         apiMetalTypes={apiMetalTypes}
-        onClose={() => { setAddModalOpen(false); setEditProduct(null); setPrefill(null); }}
-        onSaved={(saved, isNew) => {
-          if (isNew) {
-            updateProductsAndCache(ps => [saved, ...ps]);
-          } else {
-            updateProductsAndCache(ps => ps.map(p => p.id === saved.id ? saved : p));
-          }
-          setAddModalOpen(false);
-          setEditProduct(null);
-          setPrefill(null);
-        }}
+        onClose={closeModal}
+        onSaved={handleSaved}
       />
 
-      {/* Delete Confirm Modal */}
+      {/* DELETE CONFIRMATION */}
       {deleteProduct && (
         <div
           className="fixed inset-0 flex items-center justify-center p-lg"
-          style={{ backgroundColor: 'rgba(4, 9, 30, 0.55)', zIndex: 100 }}
-          onClick={() => setDeleteProduct(null)}
+          style={{
+            backgroundColor: 'rgba(4,9,30,0.55)',
+            zIndex: 100,
+          }}
+          onClick={() => {
+            if (!deleting) setDeleteProduct(null);
+          }}
         >
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              backgroundColor: '#ffffff', borderRadius: '20px', width: '100%', maxWidth: '420px',
-              border: `1px solid ${T.ivoryShade}`, boxShadow: '0 24px 60px rgba(4, 9, 30, 0.25)',
+              backgroundColor: '#fff',
+              borderRadius: '20px',
+              width: '100%',
+              maxWidth: '420px',
+              boxShadow:
+                '0 24px 60px rgba(4,9,30,0.25)',
             }}
           >
-            <div className="flex items-center justify-between" style={{ padding: '20px 24px', borderBottom: `1px solid ${T.ivoryShade}` }}>
-              <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '18px', fontWeight: 500, color: T.navy }}>Delete Product</h2>
+            <div
+              className="flex items-center justify-between"
+              style={{
+                padding: '20px 24px',
+                borderBottom: `1px solid ${T.ivoryShade}`,
+              }}
+            >
+              <h2
+                style={{
+                  fontFamily: 'Fraunces, serif',
+                  fontSize: '18px',
+                  color: T.navy,
+                }}
+              >
+                Delete Product
+              </h2>
+
               <button
                 onClick={() => setDeleteProduct(null)}
-                aria-label="Close"
-                style={{ width: '28px', height: '28px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: T.ivory, border: 'none', cursor: 'pointer' }}
+                disabled={deleting}
+                style={secondaryButton}
               >
-                <X size={15} color={T.navy} />
+                <X size={15} />
               </button>
             </div>
+
             <div style={{ padding: '20px 24px' }}>
-              <p style={{ fontSize: '13.5px', color: T.muted, lineHeight: 1.6 }}>
-                Are you sure you want to delete <strong style={{ color: T.navy, fontWeight: 600 }}>{deleteProduct.name}</strong>? This action cannot be undone.
+              <p
+                style={{
+                  fontSize: '13.5px',
+                  color: T.muted,
+                  lineHeight: 1.6,
+                }}
+              >
+                Are you sure you want to delete{' '}
+                <strong style={{ color: T.navy }}>
+                  {deleteProduct.name}
+                </strong>
+                ? This action cannot be undone.
               </p>
             </div>
-            <div className="flex items-center justify-end gap-md" style={{ padding: '16px 24px', borderTop: `1px solid ${T.ivoryShade}` }}>
+
+            <div
+              className="flex items-center justify-end gap-md"
+              style={{
+                padding: '16px 24px',
+                borderTop: `1px solid ${T.ivoryShade}`,
+              }}
+            >
               <button
                 onClick={() => setDeleteProduct(null)}
-                style={{ fontSize: '13px', fontWeight: 500, color: T.navy, backgroundColor: '#fff', border: `1px solid ${T.ivoryShade}`, borderRadius: '10px', padding: '10px 18px', cursor: 'pointer' }}
+                disabled={deleting}
+                style={secondaryButton}
               >
                 Cancel
               </button>
+
               <button
-                onClick={() => handleDelete(deleteProduct)}
-                style={{ fontSize: '13px', fontWeight: 600, color: '#fff', backgroundColor: T.danger, border: 'none', borderRadius: '10px', padding: '10px 18px', cursor: 'pointer' }}
+                onClick={() =>
+                  void handleDelete(deleteProduct)
+                }
+                disabled={deleting}
+                style={{
+                  ...primaryButton,
+                  color: '#fff',
+                  backgroundColor: T.danger,
+                  opacity: deleting ? 0.6 : 1,
+                }}
               >
-                Delete
+                {deleting ? (
+                  <Loader2
+                    size={14}
+                    className="animate-spin"
+                  />
+                ) : (
+                  <Trash2 size={14} />
+                )}
+
+                {deleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>
@@ -487,80 +947,128 @@ export function ProductsPage() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Skeleton Loading Card Component
-// ---------------------------------------------------------------------------
+// ============================================================
+// PRODUCT CARD SKELETON
+// ============================================================
+
 function ProductCardSkeleton() {
   return (
     <div
       className="animate-pulse"
       style={{
-        backgroundColor: '#ffffff',
+        backgroundColor: '#fff',
         borderRadius: '16px',
         border: `1px solid ${T.ivoryShade}`,
         overflow: 'hidden',
       }}
     >
-      {/* Image Skeleton */}
-      <div style={{ paddingBottom: '66%', backgroundColor: T.ivoryShade, position: 'relative' }} />
+      <div
+        style={{
+          paddingBottom: '66%',
+          backgroundColor: T.ivoryShade,
+        }}
+      />
 
       <div className="p-xl flex flex-col gap-lg">
-        {/* Title and tags skeleton */}
-        <div>
-          <div style={{ height: '20px', backgroundColor: T.ivoryShade, borderRadius: '6px', width: '70%', marginBottom: '8px' }} />
-          <div className="flex items-center gap-xs mt-sm">
-            <div style={{ height: '20px', width: '50px', backgroundColor: T.ivoryShade, borderRadius: '999px' }} />
-            <div style={{ height: '20px', width: '60px', backgroundColor: T.ivoryShade, borderRadius: '999px' }} />
-            <div style={{ height: '20px', width: '40px', backgroundColor: T.ivoryShade, borderRadius: '999px' }} />
-          </div>
-        </div>
+        <div
+          style={{
+            height: '20px',
+            width: '70%',
+            backgroundColor: T.ivoryShade,
+            borderRadius: '6px',
+          }}
+        />
 
-        {/* Description Skeleton */}
-        <div className="flex flex-col gap-xs">
-          <div style={{ height: '14px', backgroundColor: T.ivoryShade, borderRadius: '4px', width: '100%' }} />
-          <div style={{ height: '14px', backgroundColor: T.ivoryShade, borderRadius: '4px', width: '80%' }} />
-        </div>
+        <div
+          style={{
+            height: '14px',
+            width: '90%',
+            backgroundColor: T.ivoryShade,
+            borderRadius: '5px',
+          }}
+        />
 
-        {/* Actions Skeleton */}
-        <div className="flex items-center gap-sm" style={{ paddingTop: '12px', borderTop: `1px solid ${T.ivoryShade}` }}>
-          <div style={{ width: '34px', height: '34px', borderRadius: '9px', backgroundColor: T.ivoryShade }} />
-          <div style={{ width: '60px', height: '34px', borderRadius: '9px', backgroundColor: T.ivoryShade }} />
-          <div style={{ width: '34px', height: '34px', borderRadius: '9px', backgroundColor: T.ivoryShade }} />
-          <div style={{ width: '70px', height: '34px', borderRadius: '9px', backgroundColor: T.ivoryShade, marginLeft: 'auto' }} />
+        <div
+          style={{
+            height: '14px',
+            width: '65%',
+            backgroundColor: T.ivoryShade,
+            borderRadius: '5px',
+          }}
+        />
+
+        <div className="flex gap-sm">
+          {[34, 65, 34, 65].map((width, i) => (
+            <div
+              key={i}
+              style={{
+                width,
+                height: '34px',
+                borderRadius: '9px',
+                backgroundColor: T.ivoryShade,
+              }}
+            />
+          ))}
         </div>
       </div>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Product Card Component with Multi-Photo Gallery Support
-// ---------------------------------------------------------------------------
-function ProductCard({
-  product,
-  onToggleFeatured,
-  onEdit,
-  onDuplicate,
-  onDelete,
-}: {
+// ============================================================
+// PRODUCT CARD
+// ============================================================
+
+type ProductCardProps = {
   product: Product;
+  featuredBusy: boolean;
   onToggleFeatured: (p: Product) => void;
   onEdit: (p: Product) => void;
   onDuplicate: (p: Product) => void;
   onDelete: (p: Product) => void;
-}) {
-  const [activeImgIndex, setActiveImgIndex] = useState(0);
-  const images = product.images && product.images.length > 0 ? product.images : ['/placeholder.jpg'];
+};
 
-  const nextImage = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setActiveImgIndex((prev) => (prev + 1) % images.length);
-  };
+function ProductCard({
+  product,
+  featuredBusy,
+  onToggleFeatured,
+  onEdit,
+  onDuplicate,
+  onDelete,
+}: ProductCardProps) {
+  const [activeImgIndex, setActiveImgIndex] =
+    useState(0);
 
-  const prevImage = (e: React.MouseEvent) => {
+  const images =
+    product.images && product.images.length > 0
+      ? product.images
+      : [];
+
+  const safeIndex =
+    images.length > 0
+      ? Math.min(activeImgIndex, images.length - 1)
+      : 0;
+
+  function nextImage(e: MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
-    setActiveImgIndex((prev) => (prev - 1 + images.length) % images.length);
-  };
+
+    if (images.length > 1) {
+      setActiveImgIndex(prev =>
+        (prev + 1) % images.length
+      );
+    }
+  }
+
+  function prevImage(e: MouseEvent<HTMLButtonElement>) {
+    e.stopPropagation();
+
+    if (images.length > 1) {
+      setActiveImgIndex(prev =>
+        (prev - 1 + images.length) %
+        images.length
+      );
+    }
+  }
 
   return (
     <motion.div
@@ -568,44 +1076,78 @@ function ProductCard({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: `1px solid ${T.ivoryShade}`, overflow: 'hidden' }}
+      style={{
+        backgroundColor: '#fff',
+        borderRadius: '16px',
+        border: `1px solid ${T.ivoryShade}`,
+        overflow: 'hidden',
+      }}
     >
-      <div className="relative group" style={{ paddingBottom: '66%' }}>
-        <img
-          src={images[activeImgIndex]}
-          alt={`${product.name} image ${activeImgIndex + 1}`}
-          className="absolute inset-0 w-full h-full object-cover transition-all duration-300"
-        />
+      {/* IMAGE */}
+      <div
+        className="relative group"
+        style={{
+          paddingBottom: '66%',
+          backgroundColor: T.ivory,
+        }}
+      >
+        {images.length > 0 ? (
+          <img
+            src={images[safeIndex]}
+            alt={`${product.name} image ${safeIndex + 1}`}
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <ImagePlus
+              size={34}
+              color={T.goldSoft}
+            />
 
-        {/* Multi-Image Controls */}
+            <span
+              style={{
+                color: T.muted,
+                fontSize: '12px',
+                marginTop: '8px',
+              }}
+            >
+              No Image
+            </span>
+          </div>
+        )}
+
+        {/* IMAGE NAVIGATION */}
         {images.length > 1 && (
           <>
             <button
               onClick={prevImage}
               aria-label="Previous image"
-              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/75"
+              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-1 rounded-full hover:bg-black/75"
             >
               <ChevronLeft size={16} />
             </button>
+
             <button
               onClick={nextImage}
               aria-label="Next image"
-              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/75"
+              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-1 rounded-full hover:bg-black/75"
             >
               <ChevronRight size={16} />
             </button>
-            
-            {/* Dots indicator */}
+
             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 bg-black/40 px-2 py-1 rounded-full">
-              {images.map((_, idx) => (
+              {images.map((_, index) => (
                 <button
-                  key={idx}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveImgIndex(idx);
-                  }}
-                  className={`w-1.5 h-1.5 rounded-full transition-all ${
-                    activeImgIndex === idx ? 'bg-amber-400 w-3' : 'bg-white/60'
+                  key={index}
+                  onClick={() =>
+                    setActiveImgIndex(index)
+                  }
+                  aria-label={`Show image ${index + 1}`}
+                  className={`h-1.5 rounded-full transition-all ${
+                    safeIndex === index
+                      ? 'bg-amber-400 w-3'
+                      : 'bg-white/60 w-1.5'
                   }`}
                 />
               ))}
@@ -613,14 +1155,13 @@ function ProductCard({
           </>
         )}
 
+        {/* FEATURED BADGE */}
         {product.featured && (
           <div className="absolute top-md left-md">
             <span
               style={{
                 fontSize: '10.5px',
                 fontWeight: 700,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
                 color: T.navy,
                 backgroundColor: T.gold,
                 padding: '4px 10px',
@@ -631,80 +1172,167 @@ function ProductCard({
             </span>
           </div>
         )}
+
+        {/* VIEWS */}
         <div className="absolute top-md right-md">
           <div
             className="flex items-center gap-xs"
-            style={{ backgroundColor: 'rgba(4,9,30,0.72)', borderRadius: '999px', padding: '4px 10px' }}
+            style={{
+              backgroundColor: 'rgba(4,9,30,0.72)',
+              borderRadius: '999px',
+              padding: '4px 10px',
+            }}
           >
             <Eye size={11} color={T.ivory} />
-            <span style={{ fontSize: '11px', fontWeight: 600, color: T.ivory }}>{product.views}</span>
+
+            <span
+              style={{
+                color: T.ivory,
+                fontSize: '11px',
+                fontWeight: 600,
+              }}
+            >
+              {product.views ?? 0}
+            </span>
           </div>
         </div>
       </div>
 
+      {/* CARD CONTENT */}
       <div className="p-xl flex flex-col gap-lg">
         <div>
-          <p style={{ fontFamily: 'Fraunces, serif', fontSize: '16px', fontWeight: 500, color: T.navy }}>{product.name}</p>
-          <div className="flex items-center gap-xs mt-sm flex-wrap">
-            <span style={{ fontSize: '11px', fontWeight: 600, color: T.navy, backgroundColor: T.ivory, border: `1px solid ${T.ivoryShade}`, padding: '3px 9px', borderRadius: '999px' }}>
-              {product.category}
-            </span>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: T.muted, backgroundColor: T.ivory, border: `1px solid ${T.ivoryShade}`, padding: '3px 9px', borderRadius: '999px' }}>
-              {product.metalType}
-            </span>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: T.muted, backgroundColor: T.ivory, border: `1px solid ${T.ivoryShade}`, padding: '3px 9px', borderRadius: '999px' }}>
-              {product.purity}
-            </span>
-          </div>
-        </div>
-        <p style={{ fontSize: '13px', color: T.muted, lineHeight: 1.5 }} className="line-clamp-2">{product.description}</p>
-
-        {/* Actions */}
-        <div className="flex items-center gap-sm" style={{ paddingTop: '12px', borderTop: `1px solid ${T.ivoryShade}` }}>
-          <button
-            onClick={() => onToggleFeatured(product)}
-            title={product.featured ? 'Remove from featured' : 'Mark as featured'}
-            className="flex items-center justify-center transition-colors"
+          <p
             style={{
-              width: '34px', height: '34px', borderRadius: '9px',
-              backgroundColor: product.featured ? T.goldSoft : T.ivory,
-              border: `1px solid ${product.featured ? T.gold : T.ivoryShade}`,
+              fontFamily: 'Fraunces, serif',
+              fontSize: '16px',
+              fontWeight: 500,
+              color: T.navy,
             }}
           >
-            <Star size={15} color={product.featured ? T.navy : T.muted} fill={product.featured ? T.navy : 'none'} />
+            {product.name}
+          </p>
+
+          <div className="flex items-center gap-xs mt-sm flex-wrap">
+            {[
+              product.category,
+              product.metalType,
+              product.purity,
+            ].filter(Boolean).map((value, index) => (
+              <span
+                key={`${value}-${index}`}
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: index === 0 ? T.navy : T.muted,
+                  backgroundColor: T.ivory,
+                  border: `1px solid ${T.ivoryShade}`,
+                  padding: '3px 9px',
+                  borderRadius: '999px',
+                }}
+              >
+                {value}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <p
+          className="line-clamp-2"
+          style={{
+            fontSize: '13px',
+            color: T.muted,
+            lineHeight: 1.5,
+            minHeight: '38px',
+          }}
+        >
+          {product.description || 'No description'}
+        </p>
+
+        {/* ACTION BUTTONS */}
+        <div
+          className="flex items-center gap-sm flex-wrap"
+          style={{
+            paddingTop: '12px',
+            borderTop: `1px solid ${T.ivoryShade}`,
+          }}
+        >
+          <button
+            onClick={() => onToggleFeatured(product)}
+            disabled={featuredBusy}
+            title={
+              product.featured
+                ? 'Remove from featured'
+                : 'Mark as featured'
+            }
+            style={{
+              ...secondaryButton,
+              width: '34px',
+              height: '34px',
+              padding: 0,
+              backgroundColor: product.featured
+                ? T.goldSoft
+                : T.ivory,
+            }}
+          >
+            {featuredBusy ? (
+              <Loader2
+                size={15}
+                className="animate-spin"
+              />
+            ) : (
+              <Star
+                size={15}
+                color={
+                  product.featured
+                    ? T.navy
+                    : T.muted
+                }
+                fill={
+                  product.featured
+                    ? T.navy
+                    : 'none'
+                }
+              />
+            )}
           </button>
 
           <button
             onClick={() => onEdit(product)}
-            className="flex items-center gap-xs transition-colors"
             style={{
-              height: '34px', borderRadius: '9px', padding: '0 12px',
-              backgroundColor: T.ivory, border: `1px solid ${T.ivoryShade}`,
-              fontSize: '12px', fontWeight: 600, color: T.navy,
+              ...secondaryButton,
+              height: '34px',
             }}
           >
-            <Edit size={13} /> Edit
+            <Edit size={13} />
+            Edit
           </button>
 
           <button
             onClick={() => onDuplicate(product)}
             title="Duplicate"
-            className="flex items-center justify-center transition-colors"
-            style={{ width: '34px', height: '34px', borderRadius: '9px', backgroundColor: T.ivory, border: `1px solid ${T.ivoryShade}` }}
+            style={{
+              ...secondaryButton,
+              width: '34px',
+              height: '34px',
+              padding: 0,
+            }}
           >
-            <Copy size={14} color={T.muted} />
+            <Copy size={14} />
           </button>
 
           <button
             onClick={() => onDelete(product)}
-            className="flex items-center gap-xs transition-colors ml-auto"
+            className="ml-auto"
             style={{
-              height: '34px', borderRadius: '9px', padding: '0 12px',
-              backgroundColor: T.dangerSoft, border: `1px solid ${T.dangerSoft}`,
-              fontSize: '12px', fontWeight: 600, color: T.danger,
+              ...secondaryButton,
+              height: '34px',
+              backgroundColor: T.dangerSoft,
+              color: T.danger,
+              borderColor: T.dangerSoft,
             }}
           >
-            <Trash2 size={13} /> Delete
+            <Trash2 size={13} />
+            Delete
           </button>
         </div>
       </div>
@@ -712,291 +1340,1007 @@ function ProductCard({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Product Form Modal Component (Multiple Image Upload Support)
-// ---------------------------------------------------------------------------
-function ProductFormModal({ isOpen, product, prefill, apiCategories, apiMetalTypes, onClose, onSaved }: {
+// ============================================================
+// NEW IMAGE PREVIEW WITH OBJECT URL CLEANUP
+// ============================================================
+
+function NewImagePreview({
+  file,
+  index,
+  onRemove,
+  disabled,
+}: {
+  file: File;
+  index: number;
+  onRemove: () => void;
+  disabled: boolean;
+}) {
+  const [previewUrl, setPreviewUrl] = useState('');
+
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+
+    setPreviewUrl(url);
+
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [file]);
+
+  return (
+    <div
+      className="relative"
+      style={{
+        width: '80px',
+        height: '80px',
+        borderRadius: '10px',
+        overflow: 'hidden',
+        border: `1px solid ${T.gold}`,
+        backgroundColor: '#fff',
+        flexShrink: 0,
+      }}
+    >
+      {previewUrl && (
+        <img
+          src={previewUrl}
+          alt={`New upload ${index + 1}`}
+          className="w-full h-full object-cover"
+        />
+      )}
+
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={disabled}
+        title="Remove image"
+        className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5"
+      >
+        <X size={12} />
+      </button>
+
+      <div
+        className="absolute bottom-0 inset-x-0 text-center"
+        style={{
+          backgroundColor: 'rgba(4,9,30,0.75)',
+          color: '#fff',
+          fontSize: '10px',
+          padding: '4px 2px',
+        }}
+      >
+        {(file.size / 1024).toFixed(1)} KB
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// PRODUCT FORM MODAL
+// MAX 2 IMAGES, EACH <= 500 KB
+// ============================================================
+
+type ProductFormModalProps = {
   isOpen: boolean;
   product: Product | null;
   prefill: Partial<Product> | null;
-  apiCategories: Array<{ id: string; name: string }>;
-  apiMetalTypes: Array<{ id: string; name: string }>;
+  apiCategories: Option[];
+  apiMetalTypes: Option[];
   onClose: () => void;
   onSaved: (p: Product, isNew: boolean) => void;
-}) {
-  // Use first API category/metal as default, fallback to hardcoded defaults
-  const defaultCategory = apiCategories.length > 0 ? apiCategories[0].name : 'Rings';
-  const defaultMetalType = apiMetalTypes.length > 0 ? apiMetalTypes[0].name : '22K Gold';
+};
 
-  const initial = product ?? prefill ?? {
-    name: '', category: defaultCategory, metalType: defaultMetalType, purity: '22K', weight: '', description: '', featured: false, displayOrder: 1,
+function ProductFormModal({
+  isOpen,
+  product,
+  prefill,
+  apiCategories,
+  apiMetalTypes,
+  onClose,
+  onSaved,
+}: ProductFormModalProps) {
+  const defaultCategory =
+    apiCategories[0]?.name ||
+    CATEGORIES.find(c => c !== 'All') ||
+    'Rings';
+
+  const defaultMetalType =
+    apiMetalTypes[0]?.name ||
+    METAL_TYPES.find(m => m !== 'All') ||
+    '22K Gold';
+
+  const createInitialForm = (): Partial<Product> => ({
+    name: '',
+    category: defaultCategory,
+    metalType: defaultMetalType,
+    purity: '22K',
+    weight: '',
+    description: '',
+    featured: false,
+    displayOrder: 1,
     images: [],
-    storeId: CURRENT_STORE_ID_FALLBACK, storeName: 'Tanishq', storeLogo: '', views: 0,
-  };
+    storeId: getCurrentStoreId() || '',
+    storeName: '',
+    storeLogo: '',
+    views: 0,
+  });
 
-  const [form, setForm] = useState<Partial<Product>>(initial);
-  const [existingImages, setExistingImages] = useState<string[]>(initial.images || []);
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [form, setForm] = useState<Partial<Product>>(
+    () => product ?? prefill ?? createInitialForm()
+  );
+
+  const [existingImages, setExistingImages] =
+    useState<string[]>(
+      product?.images || prefill?.images || []
+    );
+
+  const [imageFiles, setImageFiles] =
+    useState<File[]>([]);
+
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Re-sync form when switching between add / edit / duplicate-prefill
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const [imageError, setImageError] =
+    useState<string | null>(null);
+
+  // ----------------------------------------------------------
+  // RESET MODAL
+  // ----------------------------------------------------------
+
   useEffect(() => {
-    const currentData = product ?? prefill ?? {
-      name: '', category: defaultCategory, metalType: defaultMetalType, purity: '22K', weight: '', description: '', featured: false, displayOrder: 1,
-      images: [],
-      storeId: CURRENT_STORE_ID_FALLBACK, storeName: 'Tanishq', storeLogo: '', views: 0,
-    };
-    setForm(currentData);
-    setExistingImages(currentData.images || []);
+    if (!isOpen) return;
+
+    const initialData =
+      product ?? prefill ?? createInitialForm();
+
+    setForm(initialData);
+    setExistingImages(initialData.images || []);
     setImageFiles([]);
     setError(null);
-  }, [product, prefill, isOpen, defaultCategory, defaultMetalType]);
+    setImageError(null);
+  }, [
+    product,
+    prefill,
+    isOpen,
+    defaultCategory,
+    defaultMetalType,
+  ]);
 
-  // Append newly picked files without overwriting existing selection
-  function handleImageFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    if (e.target.files && e.target.files.length > 0) {
-      const selected = Array.from(e.target.files);
-      setImageFiles(prev => [...prev, ...selected]);
+  // ----------------------------------------------------------
+  // IMAGE LIMIT COUNTERS
+  // ----------------------------------------------------------
+
+  const totalImages =
+    existingImages.length + imageFiles.length;
+
+  const remainingSlots = Math.max(
+    0,
+    MAX_PRODUCT_IMAGES - totalImages
+  );
+
+  const imageLimitExceeded =
+    totalImages > MAX_PRODUCT_IMAGES;
+
+  // ----------------------------------------------------------
+  // IMAGE VALIDATION
+  // ----------------------------------------------------------
+
+  function handleImageFileSelect(
+    e: ChangeEvent<HTMLInputElement>
+  ) {
+    const input = e.currentTarget;
+
+    const selected = Array.from(
+      input.files || []
+    );
+
+    // Reset to allow reselecting the same file.
+    input.value = '';
+
+    if (selected.length === 0) return;
+
+    setImageError(null);
+
+    if (remainingSlots <= 0) {
+      setImageError(
+        'Maximum 2 images are allowed per product. Remove an image before adding another.'
+      );
+      return;
+    }
+
+    const accepted: File[] = [];
+    const errors: string[] = [];
+
+    for (const file of selected) {
+      // FILE TYPE
+      if (!file.type.startsWith('image/')) {
+        errors.push(
+          `"${file.name}" is not an image file.`
+        );
+        continue;
+      }
+
+      // SIZE LIMIT: 500 KB
+      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+        errors.push(
+          `"${file.name}" is ${(file.size / 1024).toFixed(1)} KB. Image size must be less than or equal to 500 KB.`
+        );
+        continue;
+      }
+
+      // DUPLICATE FILE CHECK
+      const duplicate = [
+        ...imageFiles,
+        ...accepted,
+      ].some(
+        existing =>
+          existing.name === file.name &&
+          existing.size === file.size &&
+          existing.lastModified === file.lastModified
+      );
+
+      if (duplicate) {
+        errors.push(
+          `"${file.name}" is already selected.`
+        );
+        continue;
+      }
+
+      // COUNT LIMIT
+      if (accepted.length >= remainingSlots) {
+        errors.push(
+          'Only 2 images are allowed per product. Extra images were not added.'
+        );
+        break;
+      }
+
+      accepted.push(file);
+    }
+
+    if (accepted.length > 0) {
+      setImageFiles(prev => [
+        ...prev,
+        ...accepted,
+      ]);
+    }
+
+    if (errors.length > 0) {
+      setImageError(errors.join('\n'));
     }
   }
 
-  // Remove individual pre-existing image
+  // ----------------------------------------------------------
+  // REMOVE IMAGES
+  // ----------------------------------------------------------
+
   function removeExistingImage(index: number) {
-    setExistingImages(prev => prev.filter((_, i) => i !== index));
+    if (saving) return;
+
+    setExistingImages(prev =>
+      prev.filter((_, i) => i !== index)
+    );
+
+    setImageError(null);
   }
 
-  // Remove individual staged new file
   function removeNewFile(index: number) {
-    setImageFiles(prev => prev.filter((_, i) => i !== index));
+    if (saving) return;
+
+    setImageFiles(prev =>
+      prev.filter((_, i) => i !== index)
+    );
+
+    setImageError(null);
   }
+
+  // ----------------------------------------------------------
+  // SAVE FORM
+  // ----------------------------------------------------------
 
   async function handleSave() {
-    if (!form.name) return;
-    setSaving(true);
+    if (saving) return;
+
     setError(null);
+    setImageError(null);
+
+    if (!form.name?.trim()) {
+      setError('Product name is required.');
+      return;
+    }
+
+    if (imageLimitExceeded) {
+      setImageError(
+        'Maximum 2 images are allowed per product. Remove extra images.'
+      );
+      return;
+    }
+
+    const oversized = imageFiles.find(
+      file => file.size > MAX_IMAGE_SIZE_BYTES
+    );
+
+    if (oversized) {
+      setImageError(
+        `"${oversized.name}" exceeds the maximum size of 500 KB.`
+      );
+      return;
+    }
+
+    setSaving(true);
+
     try {
       const fd = new FormData();
-      fd.append('name', form.name ?? '');
+
+      fd.append('name', form.name.trim());
       fd.append('category', form.category ?? '');
       fd.append('metalType', form.metalType ?? '');
       fd.append('purity', form.purity ?? '');
       fd.append('weight', form.weight ?? '');
-      fd.append('description', form.description ?? '');
-      fd.append('featured', String(form.featured ?? false));
-      fd.append('storeName', form.storeName ?? 'Tanishq');
+      fd.append(
+        'description',
+        form.description ?? ''
+      );
+      fd.append(
+        'featured',
+        String(form.featured ?? false)
+      );
+      fd.append(
+        'storeName',
+        form.storeName ?? ''
+      );
 
-      // Send list of remaining pre-existing image URLs
-      fd.append('existingImages', JSON.stringify(existingImages));
+      // Preserve only remaining existing images.
+      fd.append(
+        'existingImages',
+        JSON.stringify(existingImages)
+      );
 
-      // Append each newly selected file
-      imageFiles.forEach(file => fd.append('images', file));
+      // Append valid new files.
+      imageFiles.forEach(file => {
+        fd.append('images', file);
+      });
 
       const isNew = !product;
+
       const saved = isNew
         ? await createProduct(fd)
-        : await updateProduct(product!.id, fd);
+        : await updateProduct(product.id, fd);
 
       onSaved(saved as Product, isNew);
-    } catch (err: any) {
-      setError(err.message ?? 'Failed to save product.');
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to save product.'
+      );
     } finally {
       setSaving(false);
     }
   }
 
+  // ----------------------------------------------------------
+  // OPTIONS
+  // ----------------------------------------------------------
+
+  const categoryOptions = getUniqueOptions(
+    CATEGORIES,
+    apiCategories,
+    form.category
+  );
+
+  const metalOptions = getUniqueOptions(
+    METAL_TYPES,
+    apiMetalTypes,
+    form.metalType
+  );
+
+  const purityOptions = Array.from(
+    new Set([
+      ...PURITY_OPTIONS,
+      ...(form.purity ? [form.purity] : []),
+    ])
+  );
+
   if (!isOpen) return null;
 
-  const inputStyle: React.CSSProperties = {
-    fontFamily: 'Inter, var(--font-family-sans)',
-    backgroundColor: T.ivory,
-    border: `1px solid ${T.ivoryShade}`,
-    color: T.navy,
-    borderRadius: '10px',
-    padding: '10px 12px',
-    fontSize: '13.5px',
-    width: '100%',
-    outline: 'none',
-  };
-  const labelStyle: React.CSSProperties = { fontSize: '12px', fontWeight: 600, color: T.muted, marginBottom: '6px', display: 'block' };
+  // ----------------------------------------------------------
+  // RENDER MODAL
+  // ----------------------------------------------------------
 
   return (
     <div
       className="fixed inset-0 flex items-center justify-center p-lg"
-      style={{ backgroundColor: 'rgba(4, 9, 30, 0.55)', zIndex: 100 }}
-      onClick={onClose}
+      style={{
+        backgroundColor: 'rgba(4,9,30,0.55)',
+        zIndex: 100,
+      }}
+      onClick={() => {
+        if (!saving) onClose();
+      }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={
+          product ? 'Edit Product' : 'Add New Product'
+        }
         onClick={e => e.stopPropagation()}
         style={{
-          backgroundColor: '#ffffff', borderRadius: '20px', width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto',
-          border: `1px solid ${T.ivoryShade}`, boxShadow: '0 24px 60px rgba(4, 9, 30, 0.25)',
+          backgroundColor: '#fff',
+          borderRadius: '20px',
+          width: '100%',
+          maxWidth: '640px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          border: `1px solid ${T.ivoryShade}`,
+          boxShadow:
+            '0 24px 60px rgba(4,9,30,0.25)',
         }}
       >
-        <div className="flex items-center justify-between" style={{ padding: '22px 26px', borderBottom: `1px solid ${T.ivoryShade}` }}>
-          <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '20px', fontWeight: 500, color: T.navy }}>
-            {product ? 'Edit Product' : 'Add New Product'}
+        {/* HEADER */}
+        <div
+          className="flex items-center justify-between"
+          style={{
+            padding: '22px 26px',
+            borderBottom: `1px solid ${T.ivoryShade}`,
+          }}
+        >
+          <h2
+            style={{
+              fontFamily: 'Fraunces, serif',
+              fontSize: '20px',
+              fontWeight: 500,
+              color: T.navy,
+            }}
+          >
+            {product
+              ? 'Edit Product'
+              : prefill
+                ? 'Duplicate Product'
+                : 'Add New Product'}
           </h2>
+
           <button
             onClick={onClose}
+            disabled={saving}
             aria-label="Close"
-            style={{ width: '30px', height: '30px', borderRadius: '8px', display: 'flex', items: 'center', justifyContent: 'center', backgroundColor: T.ivory, border: 'none', cursor: 'pointer' }}
+            style={secondaryButton}
           >
-            <X size={16} color={T.navy} />
+            <X size={16} />
           </button>
         </div>
 
-        <div className="flex flex-col gap-lg" style={{ padding: '22px 26px', fontFamily: 'Inter, var(--font-family-sans)' }}>
+        {/* FORM BODY */}
+        <div
+          className="flex flex-col gap-lg"
+          style={{
+            padding: '22px 26px',
+          }}
+        >
+          {/* FORM ERROR */}
           {error && (
-            <div style={{ backgroundColor: T.dangerSoft, border: `1px solid ${T.danger}`, borderRadius: '10px', padding: '10px 14px' }}>
-              <p style={{ fontSize: '12.5px', color: T.danger }}>{error}</p>
+            <div
+              role="alert"
+              style={{
+                backgroundColor: T.dangerSoft,
+                border: `1px solid ${T.danger}`,
+                borderRadius: '10px',
+                padding: '12px',
+                color: T.danger,
+                fontSize: '12.5px',
+              }}
+            >
+              {error}
             </div>
           )}
 
+          {/* PRODUCT NAME */}
           <div>
-            <label style={labelStyle}>Product Name</label>
-            <input style={inputStyle} placeholder="e.g. Diamond Solitaire Ring" value={form.name ?? ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            <label style={labelStyle}>
+              Product Name
+            </label>
+
+            <input
+              style={inputStyle}
+              placeholder="e.g. Diamond Solitaire Ring"
+              value={form.name ?? ''}
+              disabled={saving}
+              onChange={e =>
+                setForm(prev => ({
+                  ...prev,
+                  name: e.target.value,
+                }))
+              }
+            />
           </div>
 
+          {/* CATEGORY + METAL */}
           <div className="flex gap-lg flex-col sm:flex-row">
             <div className="flex-1">
-              <label style={labelStyle}>Category</label>
-              <select style={inputStyle} value={form.category ?? defaultCategory} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
-                {(() => {
-                  const apiCatNames = apiCategories.map(c => c.name);
-                  const defaultCats = CATEGORIES.filter(c => c !== 'All');
-                  return Array.from(new Set([...defaultCats, ...apiCatNames])).map(c => <option key={c} value={c}>{c}</option>);
-                })()}
+              <label style={labelStyle}>
+                Category
+              </label>
+
+              <select
+                style={inputStyle}
+                value={
+                  form.category ?? defaultCategory
+                }
+                disabled={saving}
+                onChange={e =>
+                  setForm(prev => ({
+                    ...prev,
+                    category: e.target.value,
+                  }))
+                }
+              >
+                {categoryOptions.map(category => (
+                  <option
+                    key={category}
+                    value={category}
+                  >
+                    {category}
+                  </option>
+                ))}
               </select>
             </div>
+
             <div className="flex-1">
-              <label style={labelStyle}>Metal Type</label>
-              <select style={inputStyle} value={form.metalType ?? defaultMetalType} onChange={e => setForm(f => ({ ...f, metalType: e.target.value }))}>
-                {(() => {
-                  const apiMetalNames = apiMetalTypes.map(m => m.name);
-                  const defaultMetals = METAL_TYPES.filter(m => m !== 'All');
-                  return Array.from(new Set([...defaultMetals, ...apiMetalNames])).map(m => <option key={m} value={m}>{m}</option>);
-                })()}
+              <label style={labelStyle}>
+                Metal Type
+              </label>
+
+              <select
+                style={inputStyle}
+                value={
+                  form.metalType ?? defaultMetalType
+                }
+                disabled={saving}
+                onChange={e =>
+                  setForm(prev => ({
+                    ...prev,
+                    metalType: e.target.value,
+                  }))
+                }
+              >
+                {metalOptions.map(metal => (
+                  <option
+                    key={metal}
+                    value={metal}
+                  >
+                    {metal}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
 
+          {/* PURITY + WEIGHT */}
           <div className="flex gap-lg flex-col sm:flex-row">
             <div className="flex-1">
-              <label style={labelStyle}>Purity</label>
-              <select style={inputStyle} value={form.purity ?? '22K'} onChange={e => setForm(f => ({ ...f, purity: e.target.value }))}>
-                {PURITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+              <label style={labelStyle}>
+                Purity
+              </label>
+
+              <select
+                style={inputStyle}
+                value={form.purity ?? '22K'}
+                disabled={saving}
+                onChange={e =>
+                  setForm(prev => ({
+                    ...prev,
+                    purity: e.target.value,
+                  }))
+                }
+              >
+                {purityOptions.map(purity => (
+                  <option
+                    key={purity}
+                    value={purity}
+                  >
+                    {purity}
+                  </option>
+                ))}
               </select>
             </div>
+
             <div className="flex-1">
-              <label style={labelStyle}>Weight (Optional)</label>
-              <input style={inputStyle} placeholder="e.g. 4.2g" value={form.weight ?? ''} onChange={e => setForm(f => ({ ...f, weight: e.target.value }))} />
+              <label style={labelStyle}>
+                Weight (Optional)
+              </label>
+
+              <input
+                style={inputStyle}
+                placeholder="e.g. 4.2g"
+                value={form.weight ?? ''}
+                disabled={saving}
+                onChange={e =>
+                  setForm(prev => ({
+                    ...prev,
+                    weight: e.target.value,
+                  }))
+                }
+              />
             </div>
           </div>
 
+          {/* DESCRIPTION */}
           <div>
-            <label style={labelStyle}>Description</label>
+            <label style={labelStyle}>
+              Description
+            </label>
+
             <textarea
-              style={{ ...inputStyle, resize: 'vertical' }}
+              style={{
+                ...inputStyle,
+                resize: 'vertical',
+              }}
               rows={3}
               placeholder="Describe the product..."
               value={form.description ?? ''}
-              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              disabled={saving}
+              onChange={e =>
+                setForm(prev => ({
+                  ...prev,
+                  description: e.target.value,
+                }))
+              }
             />
           </div>
 
-          <label className="flex items-center gap-md" style={{ cursor: 'pointer' }}>
+          {/* FEATURED CHECKBOX */}
+          <label
+            className="flex items-center gap-md"
+            style={{
+              cursor: 'pointer',
+            }}
+          >
             <input
               type="checkbox"
               checked={form.featured ?? false}
-              onChange={e => setForm(f => ({ ...f, featured: e.target.checked }))}
-              style={{ width: '16px', height: '16px', accentColor: T.gold }}
+              disabled={saving}
+              onChange={e =>
+                setForm(prev => ({
+                  ...prev,
+                  featured: e.target.checked,
+                }))
+              }
+              style={{
+                width: '16px',
+                height: '16px',
+                accentColor: T.gold,
+              }}
             />
-            <span style={{ fontSize: '13.5px', color: T.navy }}>Mark as Featured Product</span>
+
+            <span
+              style={{
+                fontSize: '13.5px',
+                color: T.navy,
+              }}
+            >
+              Mark as Featured Product
+            </span>
           </label>
 
-          {/* Multi-Photo Upload & Preview Container */}
-          <div style={{ backgroundColor: T.ivory, borderRadius: '12px', padding: '16px', border: `1px solid ${T.ivoryShade}` }}>
-            <p style={{ fontSize: '12px', fontWeight: 600, color: T.muted, marginBottom: '10px' }}>Product Images</p>
-            <div className="flex gap-md flex-wrap">
-              {/* Existing Uploaded Images */}
-              {existingImages.map((img, i) => (
-                <div key={`existing-${i}`} className="relative group" style={{ width: '64px', height: '64px', borderRadius: '10px', overflow: 'hidden', border: `1px solid ${T.ivoryShade}`, flexShrink: 0 }}>
-                  <img src={img} alt={`Preview ${i + 1}`} className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removeExistingImage(i)}
-                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5 opacity-90 hover:opacity-100 transition-opacity"
-                    title="Remove image"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
+          {/* IMAGE UPLOAD */}
+          <div
+            style={{
+              backgroundColor: T.ivory,
+              borderRadius: '12px',
+              padding: '16px',
+              border: `1px solid ${T.ivoryShade}`,
+            }}
+          >
+            {/* IMAGE HEADER */}
+            <div className="flex items-center justify-between gap-md flex-wrap">
+              <div className="flex items-center gap-sm">
+                <ImagePlus
+                  size={17}
+                  color={T.gold}
+                />
 
-              {/* Newly Picked Files */}
-              {imageFiles.map((file, i) => (
-                <div key={`new-${i}`} className="relative group" style={{ width: '64px', height: '64px', borderRadius: '10px', overflow: 'hidden', border: `1px solid ${T.gold}`, flexShrink: 0 }}>
-                  <img src={URL.createObjectURL(file)} alt={`New upload ${i + 1}`} className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removeNewFile(i)}
-                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5 opacity-90 hover:opacity-100 transition-opacity"
-                    title="Remove image"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
+                <span
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: T.navy,
+                  }}
+                >
+                  Product Images
+                </span>
+              </div>
 
-              {/* File Input Picker */}
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                id="product-image-input"
-                style={{ display: 'none' }}
-                onChange={handleImageFileSelect}
-              />
-              <label
-                htmlFor="product-image-input"
+              <span
                 style={{
-                  width: '64px', height: '64px', borderRadius: '10px', border: `2px dashed ${T.ivoryShade}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, backgroundColor: '#fff', cursor: 'pointer',
+                  backgroundColor:
+                    imageLimitExceeded
+                      ? T.dangerSoft
+                      : '#fff',
+                  border: `1px solid ${
+                    imageLimitExceeded
+                      ? T.danger
+                      : T.ivoryShade
+                  }`,
+                  color:
+                    imageLimitExceeded
+                      ? T.danger
+                      : T.navy,
+                  borderRadius: '999px',
+                  padding: '5px 10px',
+                  fontSize: '11px',
+                  fontWeight: 600,
                 }}
               >
-                <Plus size={18} />
-              </label>
+                {totalImages} / {MAX_PRODUCT_IMAGES} Images
+              </span>
             </div>
-            <p style={{ fontSize: '11.5px', color: T.muted, marginTop: '10px' }}>
-              Select multiple photos. You can delete or add more before saving.
+
+            {/* UPLOAD REQUIREMENTS */}
+            <div
+              style={{
+                marginTop: '12px',
+                marginBottom: '14px',
+                backgroundColor: '#fff8e6',
+                border: '1px solid #ead9a6',
+                borderRadius: '10px',
+                padding: '11px 13px',
+              }}
+            >
+              <div className="flex items-start gap-sm">
+                <AlertCircle
+                  size={17}
+                  color="#8c641d"
+                  style={{
+                    flexShrink: 0,
+                    marginTop: '2px',
+                  }}
+                />
+
+                <div>
+                  <p
+                    style={{
+                      color: '#8c641d',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      marginBottom: '5px',
+                    }}
+                  >
+                    Image Upload Requirements
+                  </p>
+
+                  <p
+                    style={{
+                      color: '#756340',
+                      fontSize: '11.5px',
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    Each image must be less than
+                    or equal to 500 KB.
+                  </p>
+
+                  <p
+                    style={{
+                      color: '#756340',
+                      fontSize: '11.5px',
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    Maximum 2 images per product.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* IMAGE ERROR */}
+            {imageError && (
+              <div
+                role="alert"
+                style={{
+                  backgroundColor: T.dangerSoft,
+                  border: `1px solid ${T.danger}`,
+                  borderRadius: '10px',
+                  padding: '10px 12px',
+                  marginBottom: '12px',
+                }}
+              >
+                <p
+                  style={{
+                    color: T.danger,
+                    fontSize: '12px',
+                    lineHeight: 1.6,
+                    whiteSpace: 'pre-line',
+                  }}
+                >
+                  {imageError}
+                </p>
+              </div>
+            )}
+
+            {/* PREVIEWS */}
+            <div className="flex gap-md flex-wrap">
+              {/* EXISTING IMAGES */}
+              {existingImages.map((img, index) => (
+                <div
+                  key={`existing-${index}`}
+                  className="relative"
+                  style={{
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: '10px',
+                    overflow: 'hidden',
+                    border: `1px solid ${T.ivoryShade}`,
+                    backgroundColor: '#fff',
+                    flexShrink: 0,
+                  }}
+                >
+                  <img
+                    src={img}
+                    alt={`Existing image ${index + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() =>
+                      removeExistingImage(index)
+                    }
+                    title="Remove image"
+                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5"
+                  >
+                    <X size={12} />
+                  </button>
+
+                  <div
+                    className="absolute bottom-0 inset-x-0 text-center"
+                    style={{
+                      backgroundColor:
+                        'rgba(4,9,30,0.75)',
+                      color: '#fff',
+                      fontSize: '10px',
+                      padding: '4px 2px',
+                    }}
+                  >
+                    Existing
+                  </div>
+                </div>
+              ))}
+
+              {/* NEW FILES */}
+              {imageFiles.map((file, index) => (
+                <NewImagePreview
+                  key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+                  file={file}
+                  index={index}
+                  disabled={saving}
+                  onRemove={() =>
+                    removeNewFile(index)
+                  }
+                />
+              ))}
+
+              {/* ADD IMAGE BUTTON */}
+              {remainingSlots > 0 && !saving && (
+                <label
+                  style={{
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: '10px',
+                    border: `2px dashed ${T.gold}`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px',
+                    color: T.muted,
+                    backgroundColor: '#fff',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Plus
+                    size={20}
+                    color={T.gold}
+                  />
+
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Add Image
+                  </span>
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    style={{
+                      display: 'none',
+                    }}
+                    onChange={
+                      handleImageFileSelect
+                    }
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* IMAGE STATUS */}
+            <p
+              style={{
+                fontSize: '11.5px',
+                color:
+                  imageLimitExceeded
+                    ? T.danger
+                    : T.muted,
+                marginTop: '12px',
+                lineHeight: 1.6,
+              }}
+            >
+              {imageLimitExceeded
+                ? 'Too many images. Remove extra images before saving.'
+                : remainingSlots > 0
+                  ? `You can upload ${remainingSlots} more image${
+                      remainingSlots === 1
+                        ? ''
+                        : 's'
+                    }. Maximum 500 KB per image.`
+                  : 'Maximum 2 images reached. Remove an image to upload another.'}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-md" style={{ padding: '18px 26px', borderTop: `1px solid ${T.ivoryShade}` }}>
+        {/* FOOTER */}
+        <div
+          className="flex items-center justify-end gap-md"
+          style={{
+            padding: '18px 26px',
+            borderTop: `1px solid ${T.ivoryShade}`,
+          }}
+        >
           <button
             onClick={onClose}
             disabled={saving}
-            style={{ fontSize: '13px', fontWeight: 500, color: T.navy, backgroundColor: '#fff', border: `1px solid ${T.ivoryShade}`, borderRadius: '10px', padding: '10px 18px', cursor: saving ? 'not-allowed' : 'pointer' }}
+            style={secondaryButton}
           >
             Cancel
           </button>
+
           <button
-            onClick={handleSave}
-            disabled={saving}
+            onClick={() => void handleSave()}
+            disabled={
+              saving || imageLimitExceeded
+            }
             style={{
-              fontSize: '13px', fontWeight: 600, color: T.gold, backgroundColor: T.navy, border: 'none', borderRadius: '10px', padding: '10px 20px',
-              cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', opacity: saving ? 0.7 : 1,
+              ...primaryButton,
+              opacity:
+                saving || imageLimitExceeded
+                  ? 0.6
+                  : 1,
+              cursor:
+                saving || imageLimitExceeded
+                  ? 'not-allowed'
+                  : 'pointer',
             }}
           >
-            {saving && <Loader2 size={14} className="animate-spin" />}
-            {saving ? 'Saving…' : 'Save Product'}
+            {saving && (
+              <Loader2
+                size={14}
+                className="animate-spin"
+              />
+            )}
+
+            {saving
+              ? 'Saving…'
+              : product
+                ? 'Update Product'
+                : 'Save Product'}
           </button>
         </div>
       </div>
     </div>
   );
 }
-
-const CURRENT_STORE_ID_FALLBACK = '1';
