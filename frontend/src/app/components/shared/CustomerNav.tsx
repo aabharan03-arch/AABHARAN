@@ -138,14 +138,12 @@ export function CustomerNav() {
           <div className="flex items-center gap-8 h-20">
 
             {/* Logo */}
-            <Link to="/" className="flex items-center flex-shrink-0 transition-opacity hover:opacity-80">
               <img
                 src={logo}
               
                 alt="Aabharan Logo"
                 className="h-17 w-22 l object-cover"
               />
-            </Link>
 
             {/* Search bar — desktop */}
             <div ref={searchRef} className="hidden md:flex flex-1 max-w-2xl relative ml-4">
