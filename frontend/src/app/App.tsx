@@ -22,6 +22,8 @@ import NearbyStoresPage from './components/customer/NearbyStoresPage';
 import { Outlet } from 'react-router';
 import CategoriesPage from './components/portal/Category';
 import MetalTypesPage from './components/portal/Metaltype';
+import { StoreImagesPage } from './components/portal/StoreImagesPage';
+import { Store } from 'lucide-react';
 
 function CustomerLayout() {
   return (
@@ -62,6 +64,7 @@ export default function App() {
             {/* <Route index element={<DashboardPage />} /> */}
             <Route index element={<ProductsPage />} />
             <Route path="store" element={<StorePage />} />
+            <Route path='store-imgs' element={<StoreImagesPage></StoreImagesPage>}/>
             <Route path="enquiries" element={<EnquiriesPage />} />
             <Route path="gallery" element={<GalleryPage />} />
             <Route path="categories" element={<CategoriesPage />} />

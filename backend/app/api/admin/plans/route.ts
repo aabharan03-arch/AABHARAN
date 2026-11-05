@@ -1,23 +1,28 @@
-// app/api/admin/plans/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import jwt from 'jsonwebtoken';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*', // Replace with your frontend domain in production
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  "Access-Control-Allow-Origin": "*",
+  'Access-Control-Allow-Methods':
+    'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers':
+    'Content-Type, Authorization',
 };
 
 export async function OPTIONS() {
-  return NextResponse.json({}, { status: 200, headers: corsHeaders });
+  return NextResponse.json(
+    {},
+    { status: 200, headers: corsHeaders }
+  );
 }
 
-function verifyAdmin(req: Request): { ok: true; decoded: any } | { ok: false; response: NextResponse } {
+function verifyAdmin(req: Request) {
   const authHeader = req.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+
+  if (!authHeader?.startsWith('Bearer ')) {
     return {
-      ok: false,
+      ok: false as const,
       response: NextResponse.json(
         { error: 'Unauthorized. No token provided.' },
         { status: 401, headers: corsHeaders }
@@ -25,13 +30,32 @@ function verifyAdmin(req: Request): { ok: true; decoded: any } | { ok: false; re
     };
   }
 
-  const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!);
-    return { ok: true, decoded };
+    const decoded = jwt.verify(
+      authHeader.split(' ')[1],
+      process.env.JWT_SECRET!
+    ) as {
+      id: string;
+      role: string;
+    };
+
+    if (decoded.role !== 'admin') {
+      return {
+        ok: false as const,
+        response: NextResponse.json(
+          { error: 'Forbidden. Admin access required.' },
+          { status: 403, headers: corsHeaders }
+        ),
+      };
+    }
+
+    return {
+      ok: true as const,
+      decoded,
+    };
   } catch {
     return {
-      ok: false,
+      ok: false as const,
       response: NextResponse.json(
         { error: 'Invalid or expired token.' },
         { status: 401, headers: corsHeaders }
@@ -40,92 +64,163 @@ function verifyAdmin(req: Request): { ok: true; decoded: any } | { ok: false; re
   }
 }
 
-// GET /api/admin/plans — list all plans
+function validatePlanBody(body: any) {
+  const {
+    name,
+    months,
+    cost,
+    maxProducts,
+    maxCoverPhotos,
+    maxAdvertisePhotos,
+    popupEnabled,
+    priority,
+  } = body;
+
+  if (
+    !name ||
+    typeof name !== 'string' ||
+    !name.trim()
+  ) {
+    return 'name is required.';
+  }
+
+  if (
+    !Number.isInteger(months) ||
+    months <= 0
+  ) {
+    return 'months must be a positive whole number.';
+  }
+
+  if (
+    typeof cost !== 'number' ||
+    !Number.isFinite(cost) ||
+    cost < 0
+  ) {
+    return 'cost must be a non-negative number.';
+  }
+
+  if (
+    maxProducts !== null &&
+    (!Number.isInteger(maxProducts) ||
+      maxProducts < 0)
+  ) {
+    return 'maxProducts must be null (unlimited) or a non-negative whole number.';
+  }
+
+  if (
+    !Number.isInteger(maxCoverPhotos) ||
+    maxCoverPhotos < 0
+  ) {
+    return 'maxCoverPhotos must be a non-negative whole number.';
+  }
+
+  if (
+    !Number.isInteger(maxAdvertisePhotos) ||
+    maxAdvertisePhotos < 0
+  ) {
+    return 'maxAdvertisePhotos must be a non-negative whole number.';
+  }
+
+  if (typeof popupEnabled !== 'boolean') {
+    return 'popupEnabled must be true or false.';
+  }
+
+  if (
+    !Number.isInteger(priority) ||
+    priority < 0
+  ) {
+    return 'priority must be a non-negative whole number.';
+  }
+
+  return null;
+}
+
+// GET /api/admin/plans
 export async function GET(req: Request) {
   try {
     const auth = verifyAdmin(req);
     if (!auth.ok) return auth.response;
 
     const plans = await prisma.plan.findMany({
-      orderBy: { cost: 'asc' },
+      orderBy: [
+        { priority: 'asc' },
+        { cost: 'asc' },
+      ],
     });
 
     return NextResponse.json(
-      { success: true, count: plans.length, plans },
+      {
+        success: true,
+        count: plans.length,
+        plans,
+      },
       { status: 200, headers: corsHeaders }
     );
   } catch (error: any) {
-    console.error('Fetch Plans Error:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
+      {
+        error: 'Internal server error',
+        details: error.message,
+      },
       { status: 500, headers: corsHeaders }
     );
   }
 }
 
-// POST /api/admin/plans — create a new plan
+// POST /api/admin/plans
 export async function POST(req: Request) {
   try {
     const auth = verifyAdmin(req);
     if (!auth.ok) return auth.response;
 
-    if (auth.decoded.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Forbidden. Only Admins can create plans.' },
-        { status: 403, headers: corsHeaders }
-      );
-    }
-
     const body = await req.json();
-    const { name, months, cost } = body;
+    const validationError = validatePlanBody(body);
 
-    // Validation
-    if (!name || typeof name !== 'string' || !name.trim()) {
+    if (validationError) {
       return NextResponse.json(
-        { error: 'name is required.' },
-        { status: 400, headers: corsHeaders }
-      );
-    }
-
-    if (months === undefined || typeof months !== 'number' || !Number.isInteger(months) || months <= 0) {
-      return NextResponse.json(
-        { error: 'months is required and must be a positive integer.' },
-        { status: 400, headers: corsHeaders }
-      );
-    }
-
-    if (cost === undefined || typeof cost !== 'number' || cost < 0) {
-      return NextResponse.json(
-        { error: 'cost is required and must be a non-negative number.' },
+        { error: validationError },
         { status: 400, headers: corsHeaders }
       );
     }
 
     const plan = await prisma.plan.create({
       data: {
-        name: name.trim(),
-        months,
-        cost,
+        name: body.name.trim(),
+        months: body.months,
+        cost: body.cost,
+        maxProducts: body.maxProducts,
+        maxCoverPhotos: body.maxCoverPhotos,
+        maxAdvertisePhotos:
+          body.maxAdvertisePhotos,
+        popupEnabled: body.popupEnabled,
+        priority: body.priority,
       },
     });
 
     return NextResponse.json(
-      { success: true, message: 'Plan created successfully.', plan },
+      {
+        success: true,
+        message: 'Plan created successfully.',
+        plan,
+      },
       { status: 201, headers: corsHeaders }
     );
   } catch (error: any) {
-    console.error('Create Plan Error:', error);
-
-    // Handle unique constraint violation on `name`
     if (error.code === 'P2002') {
       return NextResponse.json(
-        { error: 'A plan with this name already exists.' },
+        {
+          error:
+            'A plan with this name already exists.',
+        },
         { status: 409, headers: corsHeaders }
       );
     }
 
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
+      {
+        error: 'Internal server error',
+        details: error.message,
+      },
       { status: 500, headers: corsHeaders }
     );
   }

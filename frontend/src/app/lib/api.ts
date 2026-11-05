@@ -261,3 +261,241 @@ export async function fetchMetalTypes() {
   const data = await res.json();
   return (data.metalTypes || []) as Array<{ id: string; name: string; description?: string }>;
 }
+
+// ---------------------------------------------------------------------------
+// Plan Entitlements
+// ---------------------------------------------------------------------------
+
+export type StorePlanEntitlements = {
+  storeAdminId: string;
+  source: 'ASSIGNED_PLAN' | 'BASIC_FALLBACK';
+  subscription: {
+    id: string | null;
+    startDate: string | null;
+    expiryDate: string | null;
+    isExpired: boolean;
+  };
+  plan: {
+    id: string | null;
+    name: string;
+    cost: number;
+    months: number;
+    maxProducts: number | null;
+    maxCoverPhotos: number;
+    maxAdvertisePhotos: number;
+    popupEnabled: boolean;
+    priority: number;
+  };
+  usage: {
+    products: number;
+    coverPhotos: number;
+    advertisePhotos: number;
+  };
+  remaining: {
+    products: number | null;
+    coverPhotos: number;
+    advertisePhotos: number;
+  };
+};
+
+export async function fetchPlanEntitlements(): Promise<StorePlanEntitlements> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/storeadmin/plan`,
+    {
+      headers: {
+        ...authHeaders(),
+      },
+    }
+  );
+
+  const body = await res
+    .json()
+    .catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(
+      body.error ??
+        `Failed to fetch plan (${res.status})`
+    );
+  }
+
+  return body.entitlements;
+}
+
+// ---------------------------------------------------------------------------
+// Store Admin Images
+// ---------------------------------------------------------------------------
+
+export type StoreAdminImageType =
+  | 'COVER_PHOTO'
+  | 'ADVERTISE_PHOTO';
+
+export type StoreAdminImage = {
+  id: string;
+  img: string;
+  type: StoreAdminImageType;
+  expiryDate: string | null;
+  storeAdminId: string;
+  storeId: string | null;
+  displayOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function fetchStoreAdminImages(
+  type?: StoreAdminImageType
+): Promise<{
+  images: StoreAdminImage[];
+  entitlements: StorePlanEntitlements;
+}> {
+  const url = new URL(
+    `${API_BASE_URL}/api/storeadmin/store-imgs`
+  );
+
+  if (type) {
+    url.searchParams.set('type', type);
+  }
+
+  const res = await fetch(url.toString(), {
+    headers: {
+      ...authHeaders(),
+    },
+  });
+
+  const body = await res
+    .json()
+    .catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(
+      body.error ??
+        `Failed to fetch store images (${res.status})`
+    );
+  }
+
+  return {
+    images: body.images || [],
+    entitlements: body.entitlements,
+  };
+}
+
+export async function uploadStoreAdminImage(
+  payload: {
+    file: File;
+    type: StoreAdminImageType;
+    displayOrder?: number;
+  }
+) {
+  const formData = new FormData();
+
+  formData.append('file', payload.file);
+  formData.append('type', payload.type);
+
+  if (
+    typeof payload.displayOrder === 'number'
+  ) {
+    formData.append(
+      'displayOrder',
+      String(payload.displayOrder)
+    );
+  }
+
+  const res = await fetch(
+    `${API_BASE_URL}/api/storeadmin/store-imgs`,
+    {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+      },
+      body: formData,
+    }
+  );
+
+  const body = await res
+    .json()
+    .catch(() => ({}));
+
+  if (!res.ok) {
+    const error = new Error(
+      body.error ??
+        `Failed to upload image (${res.status})`
+    ) as Error & {
+      code?: string;
+      entitlements?: StorePlanEntitlements;
+    };
+
+    error.code = body.code;
+    error.entitlements =
+      body.entitlements;
+
+    throw error;
+  }
+
+  return body as {
+    success: true;
+    image: StoreAdminImage;
+    entitlements: StorePlanEntitlements;
+  };
+}
+
+export async function updateStoreAdminImage(
+  id: string,
+  updates: {
+    displayOrder?: number;
+    isActive?: boolean;
+  }
+) {
+  const res = await fetch(
+    `${API_BASE_URL}/api/storeadmin/store-imgs/${id}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      body: JSON.stringify(updates),
+    }
+  );
+
+  const body = await res
+    .json()
+    .catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(
+      body.error ??
+        `Failed to update image (${res.status})`
+    );
+  }
+
+  return body;
+}
+
+export async function deleteStoreAdminImage(
+  id: string
+) {
+  const res = await fetch(
+    `${API_BASE_URL}/api/storeadmin/store-imgs/${id}`,
+    {
+      method: 'DELETE',
+      headers: {
+        ...authHeaders(),
+      },
+    }
+  );
+
+  const body = await res
+    .json()
+    .catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(
+      body.error ??
+        `Failed to delete image (${res.status})`
+    );
+  }
+
+  return body;
+}
+

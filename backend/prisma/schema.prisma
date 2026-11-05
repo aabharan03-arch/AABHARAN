@@ -214,17 +214,27 @@ enum EnquiryStatus {
   CLOSED
 }
 model Plan {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  months      Int
-  cost        Float
+  id                 String   @id @default(uuid())
+  name               String   @unique
+  months             Int
+  cost               Float
 
-  subscriptions StoreSubscription[]
-  payments Payment[]
+  // Dynamic entitlements managed from Admin.
+  // null = unlimited for maxProducts.
+  maxProducts        Int?
+  maxCoverPhotos     Int      @default(0)
+  maxAdvertisePhotos Int      @default(0)
+  popupEnabled       Boolean  @default(false)
 
+  // Higher value receives higher public priority.
+  // Example: Basic=1, Standard=2, Premium=3.
+  priority           Int      @default(1)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  subscriptions      StoreSubscription[]
+  payments           Payment[]
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model StoreSubscription {
