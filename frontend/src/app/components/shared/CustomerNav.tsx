@@ -191,7 +191,7 @@ export function CustomerNav() {
             <nav className="hidden lg:flex items-center gap-1">
               {[
                 { label: 'Home', to: '/' },
-                { label: 'Stores', to: '/stores' },
+                // { label: 'Stores', to: '/stores' },
                 { label: 'About', to: '/about' },
                 { label: 'Contact', to: '/contact' },
               ].map(item => (

@@ -169,7 +169,7 @@ export function ContactPage() {
 
                 { icon: Phone, title: 'Call Us', desc: '+91 88808 36683', sub: 'Mon-Sat, 9am to 6pm IST' },
 
-                { icon: MapPin, title: 'Office', desc: 'Aabharan HQ', sub: 'Srikakulam, Andhra Pradesh, India' },
+                { icon: MapPin, title: 'Office', desc: 'Aabharan HQ', sub: 'Gt Road Srikakulam, Andhra Pradesh, India' },
 
               ].map((item, i) => (
 
