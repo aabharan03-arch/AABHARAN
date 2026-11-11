@@ -167,7 +167,7 @@ export function ContactPage() {
 
                 { icon: Mail, title: 'Email Us', desc: 'aabharan03@gmail.com', sub: 'We reply within 24 hours' },
 
-                { icon: Phone, title: 'Call Us', desc: '+91 88808 36683', sub: 'Mon-Sat, 9am to 6pm IST' },
+                { icon: Phone, title: 'Call Us', desc: '+91 83328 53922', sub: 'Mon-Sat, 9am to 6pm IST' },
 
                 { icon: MapPin, title: 'Office', desc: 'Aabharan HQ', sub: 'Gt Road Srikakulam, Andhra Pradesh, India' },
 
